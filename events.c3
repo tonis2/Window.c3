@@ -79,7 +79,7 @@ const EventType KEY_PRESSED = 2;
 const EventType KEY_RELEASED = 3;
 const EventType MOUSE_PRESSED = 4;
 const EventType MOUSE_RELEASED = 5;
-// const EventType MOUSE_RELEASED = 6;
+
 const EventType WINDOW_INIT = 12;
 const EventType WINDOW_REFRESH = 16;
 const EventType QUIT = 32;
