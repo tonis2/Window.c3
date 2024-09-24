@@ -12,6 +12,17 @@ struct Window {
         uint width;
         uint height;
     }
+    Event prev_event;
+}
+
+struct Event
+{
+   EventType type;
+   char value;
+   short mouse_x;
+   short mouse_y;
+   short mouse_x_delta;
+   short mouse_y_delta;
 }
 
 struct Params {
@@ -35,25 +46,53 @@ fn Window new(Params params, String name) {
     return window;
 }
 
-fn Event Window.getEvent(self) {
-   RawEvent* event = getEvent(self);
+fn Event Window.getEvent(&self) {
+   RawEvent* event = getEvent(*self);
+   Event event_response = Event {.type = 0};
+   
    if (event != null) {
         EventType type = (EventType)event.type;
         switch (type) {
+            case MOUSE_MOTION: {
+                KeyPressEvent* mouse_event = (KeyPressEvent*)event;
+                event_response = Event{
+                    .type = (EventType)event.type,
+                    .value = mouse_event.value,
+                    .mouse_x = mouse_event.event_x,
+                    .mouse_y = mouse_event.event_y,
+                    .mouse_x_delta = mouse_event.event_x - self.prev_event.mouse_x,
+                    .mouse_y_delta = mouse_event.event_y - self.prev_event.mouse_y
+                };
+                self.prev_event = event_response;
+                break;
+            }
             case MOUSE_PRESSED:
             case MOUSE_RELEASED: {
                 KeyPressEvent* mouse_event = (KeyPressEvent*)event;
-                return Event{ .type = (EventType)event.type, .value = mouse_event.value, .mouse_x = mouse_event.event_x, .mouse_y = mouse_event.event_y};
+                event_response = Event{
+                    .type = (EventType)event.type, 
+                    .value = mouse_event.value,
+                    .mouse_x = mouse_event.event_x,
+                    .mouse_y = mouse_event.event_y,
+                    .mouse_x_delta = mouse_event.event_x - self.prev_event.mouse_x,
+                    .mouse_y_delta = mouse_event.event_y - self.prev_event.mouse_y
+                };
+                self.prev_event = event_response;
+                break;
             }
             case KEY_PRESSED:
             case KEY_RELEASED: {
                 KeyPressEvent* key_event = (KeyPressEvent*)event;
-                return Event{ .type = (EventType)event.type, .value = key_event.value};
+                event_response = Event{ .type = (EventType)event.type, .value = key_event.value};
+                self.prev_event = event_response;
+                break;
             }
-            default: return Event {.type = 0};
+            default: {};
         }
     }
-    return Event {.type = 0 };
+
+ 
+    return event_response;
 }
 
 // Free and destroys window instance

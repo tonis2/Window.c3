@@ -69,7 +69,7 @@ Window_Result createWindow(Window_Params params) {
     xcb_window_t window = xcb_generate_id (connection);
 
     xcb_cw_t mask = XCB_CW_EVENT_MASK;
-    xcb_event_mask_t event_masks[] = {XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE};
+    xcb_event_mask_t event_masks[] = {XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_POINTER_MOTION};
 
     xcb_void_cookie_t cookie = xcb_create_window (
         connection, 
