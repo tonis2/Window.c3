@@ -79,20 +79,13 @@ const EventType KEY_PRESSED = 2;
 const EventType KEY_RELEASED = 3;
 const EventType MOUSE_PRESSED = 4;
 const EventType MOUSE_RELEASED = 5;
+const EventType MOUSE_MOTION = 6;
 
 const EventType WINDOW_INIT = 12;
 const EventType WINDOW_REFRESH = 16;
 const EventType QUIT = 32;
 const EventType DND = 33;
 const EventType DND_INIT = 34;
-
-struct Event
-{
-   EventType type;
-   char value;
-   short mouse_x;
-   short mouse_y;
-}
 
 struct RawEvent {
     EventType type;  

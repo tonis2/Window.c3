@@ -491,11 +491,15 @@ fn void! main(String[] args)
     while (running) {
         xcb::Event event = win.getEvent();
         switch (event.type) {
-            case xcb::MOUSE_PRESSED: {
-                io::printfn("mouse %s %d", event.value, event.mouse_x);
+            case xcb::MOUSE_MOTION: {
+                camera.rotate((float)event.mouse_x_delta, -(float)event.mouse_y_delta);
+                uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
+            }
+            case xcb::MOUSE_RELEASED: {
+
             }
             case xcb::KEY_PRESSED: {
-                io::printfn("key %s", event.value);
+                // io::printfn("key %s", event.value);
             }
         }
 
