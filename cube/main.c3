@@ -488,18 +488,22 @@ fn void! main(String[] args)
     bool running = true;
     uint frame = 0;
 
+    MouseParams last_params;
+
     while (running) {
         xcb::Event event = win.getEvent();
+        if (win.left_click) {
+           MouseParams params = xcb::getMousePos(win);
+           camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
+           uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
+           last_params = params;
+        }
+        
         switch (event.type) {
-            case xcb::MOUSE_MOTION: {
-                camera.rotate((float)event.mouse_x_delta, -(float)event.mouse_y_delta);
-                uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
-            }
-            case xcb::MOUSE_RELEASED: {
-
-            }
+            case xcb::MOUSE_RELEASED: {}
             case xcb::KEY_PRESSED: {
-                // io::printfn("key %s", event.value);
+                if (event.value == xcb::ESCAPE) running = false;
+                io::printfn("key %s", event.value);
             }
         }
 

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <xcb/xproto.h>
 
 typedef struct Size {
     uint32_t width;
@@ -26,7 +27,16 @@ typedef struct Window_Params {
     int border_width;
 } Window_Params;
 
+typedef struct MouseParams {
+    uint8_t type;
+    uint16_t x;
+    uint16_t y;
+    uint16_t root_x;
+    uint16_t root_y;
+} MouseParams;
+
 void destroy(Window_Result window) {
+    xcb_destroy_window( window.connection, window.window );
     xcb_disconnect(window.connection);
 }
 
@@ -34,8 +44,25 @@ void changeWindowName(Window_Result window, const char* name) {
     xcb_change_property(window.connection, XCB_PROP_MODE_REPLACE, window.window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, sizeof(name), name);
 }
 
- xcb_generic_event_t* getEvent(Window_Result window) {
+xcb_generic_event_t* getEvent(Window_Result window) {
    return xcb_poll_for_event(window.connection);
+}
+
+MouseParams getMousePos(Window_Result window) {
+   xcb_query_pointer_cookie_t cookie = xcb_query_pointer(window.connection, window.window);
+   xcb_generic_error_t* err;
+   xcb_query_pointer_reply_t* response = xcb_query_pointer_reply(window.connection, cookie, &err);
+
+   MouseParams params = {
+        response->response_type,
+        response->win_x,
+        response->win_y,
+        response->root_x,
+        response->root_y
+   };
+   free(response);
+   free(err);
+   return params;
 }
 
 Window_Result createWindow(Window_Params params) {
@@ -69,7 +96,7 @@ Window_Result createWindow(Window_Params params) {
     xcb_window_t window = xcb_generate_id (connection);
 
     xcb_cw_t mask = XCB_CW_EVENT_MASK;
-    xcb_event_mask_t event_masks[] = {XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_POINTER_MOTION};
+    xcb_event_mask_t event_masks[] = {XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_STRUCTURE_NOTIFY};
 
     xcb_void_cookie_t cookie = xcb_create_window (
         connection, 
