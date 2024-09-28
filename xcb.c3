@@ -12,7 +12,8 @@ struct Window {
         uint width;
         uint height;
     }
-    Event prev_event;
+    bool left_click;
+    bool right_click;
 }
 
 struct Event
@@ -21,8 +22,6 @@ struct Event
    char value;
    short mouse_x;
    short mouse_y;
-   short mouse_x_delta;
-   short mouse_y_delta;
 }
 
 struct Params {
@@ -34,9 +33,18 @@ struct Params {
     int border_width;
 }
 
+struct MouseParams {
+    char type;
+    ushort x;
+    ushort y;
+    ushort root_x;
+    ushort root_y;
+}
+
 extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn void destroy(Window window) @extern("destroy");
 extern fn void changeWindowName(Window window, ZString name) @extern("changeWindowName");
+extern fn MouseParams getMousePos(Window window) @extern("getMousePos");
 extern fn RawEvent* getEvent(Window window) @extern("getEvent");
 
 // Creates new XCB window
@@ -49,42 +57,53 @@ fn Window new(Params params, String name) {
 fn Event Window.getEvent(&self) {
    RawEvent* event = getEvent(*self);
    Event event_response = Event {.type = 0};
-   
+
    if (event != null) {
         EventType type = (EventType)event.type;
         switch (type) {
-            case MOUSE_MOTION: {
+            case MOUSE_MOTION: {}
+            case MOUSE_PRESSED: {
                 KeyPressEvent* mouse_event = (KeyPressEvent*)event;
-                event_response = Event{
-                    .type = (EventType)event.type,
-                    .value = mouse_event.value,
-                    .mouse_x = mouse_event.event_x,
-                    .mouse_y = mouse_event.event_y,
-                    .mouse_x_delta = mouse_event.event_x - self.prev_event.mouse_x,
-                    .mouse_y_delta = mouse_event.event_y - self.prev_event.mouse_y
-                };
-                self.prev_event = event_response;
-                break;
-            }
-            case MOUSE_PRESSED:
-            case MOUSE_RELEASED: {
-                KeyPressEvent* mouse_event = (KeyPressEvent*)event;
+  
                 event_response = Event{
                     .type = (EventType)event.type, 
                     .value = mouse_event.value,
                     .mouse_x = mouse_event.event_x,
                     .mouse_y = mouse_event.event_y,
-                    .mouse_x_delta = mouse_event.event_x - self.prev_event.mouse_x,
-                    .mouse_y_delta = mouse_event.event_y - self.prev_event.mouse_y
                 };
-                self.prev_event = event_response;
+
+                if ((MouseButton)mouse_event.value == LEFT_MOUSE) {
+                    self.left_click = true;
+                }
+
+                if ((MouseButton)mouse_event.value == RIGHT_MOUSE) {
+                    self.right_click = true;
+                }
+            }
+            case MOUSE_RELEASED: {
+                KeyPressEvent* mouse_event = (KeyPressEvent*)event;
+  
+                event_response = Event{
+                    .type = (EventType)event.type, 
+                    .value = mouse_event.value,
+                    .mouse_x = mouse_event.event_x,
+                    .mouse_y = mouse_event.event_y,
+                };
+
+                if ((MouseButton)mouse_event.value == LEFT_MOUSE) {
+                    self.left_click = false;
+                }
+
+                if ((MouseButton)mouse_event.value == RIGHT_MOUSE) {
+                    self.right_click = false;
+                }
+
                 break;
             }
             case KEY_PRESSED:
             case KEY_RELEASED: {
                 KeyPressEvent* key_event = (KeyPressEvent*)event;
                 event_response = Event{ .type = (EventType)event.type, .value = key_event.value};
-                self.prev_event = event_response;
                 break;
             }
             default: {};
