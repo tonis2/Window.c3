@@ -3,16 +3,18 @@
 	"warnings": ["no-unused"],
 	"authors": [],
 	"version": "0.1.0",
-	"dependency-search-paths": ["dependencies"],
-	"dependencies": ["vk"],
+	"dependency-search-paths": ["./"],
+	"dependencies": ["vk", "c3w"],
 	"features": [],
-	"linked-libraries": ["X11", "Xrandr", "X11-xcb", "xcb"],
 	"targets": {
 		"cube": {
 			"type": "executable",
-			"c-sources" : ["xcb.c"],
-			"cflags": "-fPIE",
-			"sources-add": ["./cube/main.c3", "./cube/camera.c3", "./xcb.c3", "./events.c3"],
+			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
+			"dependencies-add": []
+		},
+		"test": {
+			"type": "executable",
+			"sources-add": ["./test/main.c3"],
 			"dependencies-add": []
 		}
 	},
