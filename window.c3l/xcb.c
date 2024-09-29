@@ -10,10 +10,14 @@ typedef struct Size {
     uint32_t height;
 } Size;
 
-typedef struct Window_Result {
+typedef struct WindowSrc {
     Display* dpy;
     xcb_connection_t* connection;
     xcb_window_t window;
+} WindowSrc;
+
+typedef struct Window_Result {
+    WindowSrc src;
     uint32_t padding;
     Size screen_info;
 } Window_Result;
@@ -36,22 +40,22 @@ typedef struct MouseParams {
 } MouseParams;
 
 void destroy(Window_Result window) {
-    xcb_destroy_window( window.connection, window.window );
-    xcb_disconnect(window.connection);
+    xcb_destroy_window( window.src.connection, window.src.window );
+    xcb_disconnect(window.src.connection);
 }
 
 void changeWindowName(Window_Result window, const char* name) {
-    xcb_change_property(window.connection, XCB_PROP_MODE_REPLACE, window.window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, sizeof(name), name);
+    xcb_change_property(window.src.connection, XCB_PROP_MODE_REPLACE, window.src.window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, sizeof(name), name);
 }
 
 xcb_generic_event_t* getEvent(Window_Result window) {
-   return xcb_poll_for_event(window.connection);
+   return xcb_poll_for_event(window.src.connection);
 }
 
 MouseParams getMousePos(Window_Result window) {
-   xcb_query_pointer_cookie_t cookie = xcb_query_pointer(window.connection, window.window);
+   xcb_query_pointer_cookie_t cookie = xcb_query_pointer(window.src.connection, window.src.window);
    xcb_generic_error_t* err;
-   xcb_query_pointer_reply_t* response = xcb_query_pointer_reply(window.connection, cookie, &err);
+   xcb_query_pointer_reply_t* response = xcb_query_pointer_reply(window.src.connection, cookie, &err);
 
    MouseParams params = {
         response->response_type,
@@ -121,11 +125,15 @@ Window_Result createWindow(Window_Params params) {
         screen -> width_in_pixels,
         screen -> height_in_pixels
     };
-    
-    Window_Result result = {
+
+    WindowSrc window_src = {
         dpy,
         connection,
-        window,
+        window
+    };
+    
+    Window_Result result = {
+        window_src,
         0,
         screen_info
     };
