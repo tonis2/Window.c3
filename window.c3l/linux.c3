@@ -1,45 +1,7 @@
-module xcb;
+module c3w @if(env::LINUX);
 import std::math;
-import std::os::win32;
 import vk;
 import std::io;
-
-struct Window {
-    vk::Display display;
-    vk::Connection connection;
-    vk::Window window;
-    struct screen_info {
-        uint width;
-        uint height;
-    }
-    bool left_click;
-    bool right_click;
-}
-
-struct Event
-{
-   EventType type;
-   char value;
-   short mouse_x;
-   short mouse_y;
-}
-
-struct Params {
-    int depth;
-    int x;
-    int y;
-    int width;
-    int height;
-    int border_width;
-}
-
-struct MouseParams {
-    char type;
-    ushort x;
-    ushort y;
-    ushort root_x;
-    ushort root_y;
-}
 
 extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn void destroy(Window window) @extern("destroy");
@@ -110,7 +72,6 @@ fn Event Window.getEvent(&self) {
         }
     }
 
- 
     return event_response;
 }
 
