@@ -18,7 +18,6 @@ typedef struct WindowSrc {
 
 typedef struct Window_Result {
     WindowSrc src;
-    uint32_t padding;
     Size screen_info;
 } Window_Result;
 
@@ -120,22 +119,17 @@ Window_Result createWindow(Window_Params params) {
     // printf("root: %d\n", cookie.sequence);
     // printf("Connection: %p\n", connection);
     // printf("Window: %d\n", window);
-
-    Size screen_info = {
-        screen -> width_in_pixels,
-        screen -> height_in_pixels
-    };
-
-    WindowSrc window_src = {
-        dpy,
-        connection,
-        window
-    };
     
     Window_Result result = {
-        window_src,
-        0,
-        screen_info
+        {
+            dpy,
+            connection,
+            window
+        },
+        {
+            screen -> width_in_pixels,
+            screen -> height_in_pixels
+        }
     };
     return result;
 }
