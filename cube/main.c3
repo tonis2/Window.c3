@@ -75,7 +75,7 @@ ZStringList device_extensions;
 
 fn void! main(String[] args)
 {
-    xcb::Window win = xcb::new(
+    c3w::Window win = c3w::new(
         params: {
             .width = WIDTH,
             .height = HEIGHT,
@@ -86,7 +86,7 @@ fn void! main(String[] args)
     );
     defer win.free();
 
-    io::printfn("connection %p window %d", win.connection, win.window);
+    io::printfn("connection %p window %d", win.src.connection, win.src.window);
     io::printfn("(Screen) width %d height %d", win.screen_info.width, win.screen_info.height);
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
@@ -150,8 +150,8 @@ fn void! main(String[] args)
                 vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, 
                 null, 
                 0, 
-                win.connection,
-                win.window,
+                win.src.connection,
+                win.src.window,
             };
 
             vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
@@ -491,18 +491,18 @@ fn void! main(String[] args)
     MouseParams last_params;
 
     while (running) {
-        xcb::Event event = win.getEvent();
+        c3w::Event event = win.getEvent();
         if (win.left_click) {
-           MouseParams params = xcb::getMousePos(win);
+           MouseParams params = c3w::getMousePos(win);
            camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
            uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
            last_params = params;
         }
         
         switch (event.type) {
-            case xcb::MOUSE_RELEASED: {}
-            case xcb::KEY_PRESSED: {
-                if (event.value == xcb::ESCAPE) running = false;
+            case c3w::MOUSE_RELEASED: {}
+            case c3w::KEY_PRESSED: {
+                if (event.value == c3w::ESCAPE) running = false;
                 io::printfn("key %s", event.value);
             }
         }
