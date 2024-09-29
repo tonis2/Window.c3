@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.ts": "typescript",
+        "stdio.h": "c",
+        "windows.h": "c",
+        "stdlib.h": "c"
+    }
+}

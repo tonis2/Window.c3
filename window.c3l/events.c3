@@ -1,4 +1,4 @@
-module xcb;
+module c3w;
 
 distinct EventType = inline char;
 const EventType EMPTY_EVENT = 0;
