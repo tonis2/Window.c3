@@ -7,8 +7,8 @@ struct DarwinWindow {
 }
 
 struct Win32Window {
-    vk::Hinstance instance;
     vk::Hwnd window;
+    vk::Hinstance instance;
 }
 
 struct LinuxWindow {
