@@ -1,6 +1,5 @@
 { 
   "provides" : "c3w",
-
   "sources": ["main.c3", "events.c3"],
   "targets" : {
     "macos-x64" : {
@@ -15,7 +14,7 @@
     "windows-x64" : {
       "c-sources-add" : ["win32.c"],
       "sources-add": ["win32.c3"],
-      "linked-libs" : ["win32"]
+      "linked-libs" : []
     }
   }
 }

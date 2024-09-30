@@ -4,8 +4,12 @@ import std::os::win32;
 import vk;
 import std::io;
 
-extern fn void createWindow() @extern("WinMain");
+extern fn Window createWindow(Params params) @extern("createWindow");
 
-fn void new(Params params, String name) {
-    createWindow();
+fn Window new(Params params, String name) {
+    return createWindow(params);
+}
+
+fn void Window.free(self) {
+  
 }

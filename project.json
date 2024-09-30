@@ -6,6 +6,7 @@
 	"dependency-search-paths": ["./"],
 	"dependencies": ["vk", "c3w"],
 	"features": [],
+	"linked-libs" : [],
 	"targets": {
 		"cube": {
 			"type": "executable",
