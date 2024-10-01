@@ -14,4 +14,9 @@ fn void! main(String[] args)
         name: "Cube"
     );
     defer win.free();
+    
+    bool running = true;
+    while (running) {
+        c3w::Event event = win.getEvent();
+    }
 }
