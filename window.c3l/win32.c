@@ -29,27 +29,46 @@ typedef struct Window_Params {
     int border_width;
 } Window_Params;
 
+typedef struct Event {
+    uint32_t type;
+    uint32_t mouse_x;
+    uint32_t mouse_y;
+} Event;
+
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
 
     case WM_CLOSE:
-        // running = false;
-        break;
+          // running = false;
+          break;
     }
 
     return DefWindowProcA(window, msg, wParam, lParam);
 }
 
-
+Event getEvent(Window_Result window) {
+  UpdateWindow(window.src.window);
+  Event event = {0};
+  MSG message;
+  if (GetMessageW(&message, NULL, 0, 0) > 0) {
+      TranslateMessage(&message);
+      DispatchMessageW(&message);
+      event.type = message.message;
+      event.mouse_x = message.pt.x;
+      event.mouse_y = message.pt.y;
+      printf("msg: %d\n", message.message);
+  }
+  return event;
+}
 
 Window_Result createWindow(Window_Params params)
 {
     char* szWindowClass = "win32app";
     WNDCLASSEXA wc = {0};
     HWND window;
-    MSG     msg;
+    MSG msg;
     HINSTANCE instance = {0};
      // make sure all the members are zero-ed out to start
     wc.cbSize        = sizeof(wc);
@@ -74,7 +93,7 @@ Window_Result createWindow(Window_Params params)
         szWindowClass,
         "Window title",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT,
+        params.x, params.y,
         params.height, params.width,
         NULL,
         NULL,
@@ -101,5 +120,4 @@ Window_Result createWindow(Window_Params params)
         },
     };
     return result;
-
 }

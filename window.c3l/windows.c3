@@ -5,9 +5,16 @@ import vk;
 import std::io;
 
 extern fn Window createWindow(Params params) @extern("createWindow");
+extern fn Event getEvent(Window window) @extern("getEvent");
 
 fn Window new(Params params, String name) {
     return createWindow(params);
+}
+
+fn Event Window.getEvent(self) {
+    Event event;
+    getEvent(self);
+    return event;
 }
 
 fn void Window.free(self) {
