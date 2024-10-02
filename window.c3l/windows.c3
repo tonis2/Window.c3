@@ -6,14 +6,14 @@ import std::io;
 
 extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn Event getEvent(Window window) @extern("getEvent");
+extern fn MouseParams getMousePos(Window window) @extern("getMousePos");
 
 fn Window new(Params params, String name) {
     return createWindow(params);
 }
 
 fn Event Window.getEvent(self) {
-    Event event;
-    getEvent(self);
+    Event event = getEvent(self);
     return event;
 }
 
