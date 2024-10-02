@@ -1,5 +1,5 @@
 module vk;
-// @link(env::WIN32, "vulkan-1.lib");
+
 
 const MAX_PHYSICAL_DEVICE_NAME_SIZE = 256;
 const UUID_SIZE = 16;

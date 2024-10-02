@@ -30,10 +30,28 @@ typedef struct Window_Params {
 } Window_Params;
 
 typedef struct Event {
-    uint32_t type;
-    uint32_t mouse_x;
-    uint32_t mouse_y;
+    char type;
+    char value;
+    uint16_t mouse_x;
+    uint16_t mouse_y;
 } Event;
+
+typedef struct MouseParams {
+    uint8_t type;
+    uint16_t x;
+    uint16_t y;
+    uint16_t root_x;
+    uint16_t root_y;
+} MouseParams;
+
+MouseParams getMousePos(Window_Result window) {
+
+   MouseParams params = {
+     0
+   };
+
+   return params;
+}
 
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -52,13 +70,12 @@ Event getEvent(Window_Result window) {
   UpdateWindow(window.src.window);
   Event event = {0};
   MSG message;
-  if (GetMessageW(&message, NULL, 0, 0) > 0) {
+  if (GetMessageW(&message, window.src.window, 0, 0) > 0) {
       TranslateMessage(&message);
       DispatchMessageW(&message);
       event.type = message.message;
       event.mouse_x = message.pt.x;
       event.mouse_y = message.pt.y;
-      printf("msg: %d\n", message.message);
   }
   return event;
 }

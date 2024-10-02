@@ -8,7 +8,7 @@ import camera;
 const WIDTH = 800;
 const HEIGHT = 600;
 const VK_API_VERSION_1_3 = vk::@makeApiVersion(0,1,3,0);
-const ENABLE_VALIDATION_LAYERS = false;
+const ENABLE_VALIDATION_LAYERS = true;
 const MAX_FRAMES_IN_FLIGHT = 2;
 
 struct Vertex {
@@ -57,7 +57,6 @@ ushort[] indices = {
     20, 21, 22,     20, 22, 23    // left
 };
 
-
 Instance instance;
 DebugUtilsMessengerEXT debug_messenger;
 PhysicalDevice physical_device;
@@ -86,7 +85,7 @@ fn void! main(String[] args)
     );
     defer win.free();
 
-    io::printfn("connection %p window %d", win.src.connection, win.src.window);
+    // io::printfn("connection %p window %d", win.src.connection, win.src.window);
     io::printfn("(Screen) width %d height %d", win.screen_info.width, win.screen_info.height);
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
@@ -108,7 +107,7 @@ fn void! main(String[] args)
         extensions.add_array({"VK_KHR_xcb_surface"});
     }
 
-    vk::checkExtensionSupport(extensions)!;
+    vk::checkInstanceExtensionSupport(extensions)!;
 
     InstanceCreateInfo instanceInfo = vk::instanceCreateInfo()
     .setApplicationInfo(&&ApplicationInfo{
@@ -161,9 +160,10 @@ fn void! main(String[] args)
                 vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
                 null,
                 0,
-                win.src.window,
-                &win.src.hdc
+                win.src.instance,
+                win.src.window
             };
+            vk::createWin32SurfaceKHR(instance, &createInfo, null, &surface)!!;
         }
         $default: {}
     $endswitch
