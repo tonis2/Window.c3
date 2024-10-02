@@ -90,7 +90,7 @@ fn void! main(String[] args)
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
 
-    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor", "VK_KHR_dynamic_rendering"});
+    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor"});
     validations.add_array({"VK_LAYER_KHRONOS_validation"});
     extensions.add_array({"VK_KHR_surface", "VK_EXT_debug_utils"});
 
@@ -210,15 +210,9 @@ fn void! main(String[] args)
 		.bufferDeviceAddress = vk::TRUE,
 		.bufferDeviceAddressCaptureReplay = vk::TRUE
 	};
-
-	PhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {
-		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-		.pNext = &buffer_device_feature
-	};
-
 	PhysicalDeviceSynchronization2Features syncronisation2_feature = {
 		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-		.pNext = &dynamic_rendering_feature,
+		.pNext = &buffer_device_feature,
 		.synchronization2 = vk::TRUE
 	};
 
@@ -392,6 +386,31 @@ fn void! main(String[] args)
 
     PipelineLayout pipeline_layout = vk::pipelineLayoutCreateInfo().setSetLayouts({ descriptor_set_layout }).build(device)!;
 
+    SubpassDescription subpass = {
+            .pipelineBindPoint = vk::PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &&AttachmentReference{
+            .attachment = 0,
+            .layout = vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        }
+    };
+
+    RenderPass render_pass = vk::renderPassCreateInfo()
+    .setAttachments({
+        AttachmentDescription {
+            .format = swapchain_info.imageFormat,
+            .samples = vk::SAMPLE_COUNT_1_BIT,
+            .initialLayout = vk::IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = vk::IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .loadOp = vk::ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = vk::ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = vk::ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = vk::ATTACHMENT_STORE_OP_DONT_CARE
+        }
+    })
+    .setSubpasses({subpass})
+    .build(device)!;
+
     // Create Renderpipeline info
     Pipeline pipeline = vk::graphicsPipelineCreateInfo()
     .setStages(&draw_shaders.stages)
@@ -471,8 +490,23 @@ fn void! main(String[] args)
     .setViewportState(&&vk::pipelineViewportStateCreateInfo()
                    .setViewports({{ .x = 0.0, .y = 0.0, .width = swapchain_info.imageExtent.width, .height = swapchain_info.imageExtent.height, .minDepth = 0.0, .maxDepth = 1.0 }})
                    .setScissors({{ .offset = { .x = 0, .y = 0 }, .extent = swapchain_info.imageExtent }}))
-    .setNext(&&vk::pipelineRenderingCreateInfo().setColorAttachmentFormats({swapchain_info.imageFormat}))
+    .setRenderPass(render_pass)
     .build(device)!;
+
+
+    FrameBufferList frame_buffers = device.createFrameBuffers(
+        &&FramebufferCreateInfo {
+            .sType = vk::STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = render_pass,
+            .attachmentCount = 1,
+            .width = WIDTH,
+            .height = HEIGHT,
+            .layers = 1,
+        },
+        swapchain_views
+    )!;
+
+    defer frame_buffers.free();
 
     // Create syncronisation stuff
     SemaphoreList wait_semaphores;
@@ -503,7 +537,6 @@ fn void! main(String[] args)
             case c3w::MOUSE_RELEASED: {}
             case c3w::KEY_PRESSED: {
                 if (event.value == c3w::ESCAPE) running = false;
-                io::printfn("key %s", event.value);
             }
         }
 
@@ -516,56 +549,24 @@ fn void! main(String[] args)
 
         uint next_image = swapchain.getNextImage(device, wait_semaphore);
 
-        // Start dynamic rendering
-        RenderingInfo rendering_info = vk::renderingInfo()
-        .setLayerCount(1)
+        RenderPassBeginInfo render_pass_info = vk::renderPassBeginInfo()
+        .setFramebuffer(frame_buffers[next_image])
+        .setRenderPass(render_pass)
         .setRenderArea({
-            .offset = Offset2D{ .x = 0, .y = 0 },
-            .extent = swapchain_info.imageExtent,
+            .offset = {0, 0},
+            .extent = extent
         })
-        .setColorAttachments({
-            vk::renderingAttachmentInfo()
-            .setImageView(swapchain_views[next_image])
-            .setImageLayout(vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-            .setStoreOp(vk::ATTACHMENT_STORE_OP_STORE)
-            .setLoadOp(vk::ATTACHMENT_LOAD_OP_CLEAR)
-            .setClearValue({
+        .setClearValues({
+            ClearValue {
                 .color = { .float32 = { 0.0, 0.0, 0.0, 1.0 }}
-            })
+            }
         });
 
         CommandBuffer command_buffer = command_buffers[next_image];
         vk::resetCommandBuffer(command_buffer, 0)!;
         vk::beginCommandBuffer(command_buffer, &&vk::commandBufferBeginInfo())!;
 
-        ImageMemoryBarrier image_memory_start = vk::imageMemoryBarrier()
-        .setDstAccessMask(vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-        .setOldLayout(vk::IMAGE_LAYOUT_UNDEFINED)
-        .setNewLayout(vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-        .setImage(swapchain_images[next_image])
-        .setSubresourceRange({
-            .aspectMask = vk::IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        });
-
-        vk::cmdPipelineBarrier(
-            command_buffer,
-            vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0,
-            0,
-            null,
-            0,
-            null,
-            1,
-            &image_memory_start
-        );
-
-        vk::cmdBeginRendering(command_buffer, &rendering_info);
-
+        vk::cmdBeginRenderPass(command_buffer, &render_pass_info, vk::SUBPASS_CONTENTS_INLINE);
         vk::cmdSetViewport(command_buffer, 0, 1, &&vk::Viewport{.width = WIDTH, .height = HEIGHT, .minDepth = 0.0, .maxDepth = 1.0 });
         vk::cmdSetScissor(command_buffer, 0, 1, &&vk::Rect2D {.extent = swapchain_info.imageExtent, .offset = Offset2D{ .x = 0, .y = 0 }});
 
@@ -575,34 +576,8 @@ fn void! main(String[] args)
         vk::cmdBindVertexBuffers(command_buffer, 0, 1, &&vk::Buffer[1]{vertex_buffer.buffer}, &&vk::DeviceSize[1]{0});
         vk::cmdBindIndexBuffer(command_buffer, index_buffer.buffer, 0, vk::INDEX_TYPE_UINT16);
         vk::cmdDrawIndexed(command_buffer, indices.len, 1, 0, 0, 0);
-        vk::cmdEndRendering(command_buffer);
-
-        ImageMemoryBarrier image_memory_end = vk::imageMemoryBarrier()
-        .setSrcAccessMask(vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-        .setOldLayout(vk::IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-        .setNewLayout(vk::IMAGE_LAYOUT_PRESENT_SRC_KHR)
-        .setImage(swapchain_images[next_image])
-        .setSubresourceRange({
-            .aspectMask = vk::IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        });
-
-        vk::cmdPipelineBarrier(
-            command_buffer,
-            vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-            0,
-            0,
-            null,
-            0,
-            null,
-            1,
-            &image_memory_end
-        );
-
+        vk::cmdEndRenderPass(command_buffer);
+  
         SubmitInfo submit_info = vk::submitInfo()
         .setWaitSemaphores({ wait_semaphore })
         .setCommandBuffers({ command_buffer })
@@ -626,6 +601,7 @@ fn void! main(String[] args)
 
     swapchain.free(device);
     foreach (view : swapchain_views) view.free(device);
+    foreach (buffer : frame_buffers) buffer.free(device);
     swapchain_images.free();
     swapchain_views.free();
     command_pool.free(device);
