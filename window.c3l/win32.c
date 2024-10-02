@@ -111,7 +111,7 @@ Window_Result createWindow(Window_Params params)
         "Window title",
         WS_OVERLAPPEDWINDOW,
         params.x, params.y,
-        params.height, params.width,
+        params.width, params.height,
         NULL,
         NULL,
         instance,
