@@ -25,8 +25,7 @@ struct Window {
         uint width;
         uint height;
     }
-    bool left_click;
-    bool right_click;
+    MouseButton mouse_click;
 }
 
 struct Event
@@ -35,6 +34,7 @@ struct Event
    char value;
    short mouse_x;
    short mouse_y;
+   MouseButton mouse_click;
 }
 
 struct Params {
@@ -52,4 +52,33 @@ struct MouseParams {
     ushort y;
     ushort root_x;
     ushort root_y;
+}
+
+
+distinct EventType = inline char;
+const EventType EMPTY_EVENT = 0;
+const EventType KEY_PRESSED = 2;
+const EventType KEY_RELEASED = 3;
+const EventType MOUSE_PRESSED = 4;
+const EventType MOUSE_RELEASED = 5;
+const EventType MOUSE_MOTION = 6;
+
+const EventType WINDOW_INIT = 12;
+const EventType WINDOW_REFRESH = 16;
+const EventType QUIT = 32;
+const EventType DND = 33;
+const EventType DND_INIT = 34;
+
+distinct Key = inline char;
+const Key EMPTY_KEY = 0;
+const Key ESCAPE = 9;
+
+enum MouseButton : char (char value)
+{
+    NONE = 0,
+    LEFT_MOUSE = 1,
+    MIDDLE_MOUSE = 2,
+    RIGHT_MOUSE = 3,
+    MOUSE_SCROLL_UP = 4,
+    MOUSE_SCROLL_DOWN = 5,
 }
