@@ -6,17 +6,17 @@
 	"dependency-search-paths": ["./"],
 	"dependencies": ["vk", "c3w"],
 	"features": [],
-	"linked-libs" : [],
+	"linked-libraries" : [],
 	"targets": {
 		"cube": {
 			"type": "executable",
 			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
-			"dependencies-add": []
+			"dependencies": []
 		},
 		"test": {
 			"type": "executable",
 			"sources-add": ["./test/main.c3"],
-			"dependencies-add": []
+			"dependencies": []
 		}
 	},
 	"output": "./build"
