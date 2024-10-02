@@ -1,20 +1,17 @@
 { 
   "provides" : "c3w",
-  "sources": ["main.c3", "events.c3"],
   "targets" : {
     "macos-x64" : {
-      "linked-libs" : []
+      "linked-libraries" : []
     },
     "linux-x64" : {
       "cflags": "-fPIE",
-      "c-sources-add" : ["xcb.c"],
-      "sources-add": ["linux.c3"],
-      "linked-libs" : ["X11", "Xrandr", "X11-xcb", "xcb"]
+      "c-sources" : ["xcb.c"],
+      "linked-libraries" : ["X11", "Xrandr", "X11-xcb", "xcb"]
     },
     "windows-x64" : {
-      "c-sources-add" : ["win32.c"],
-      "sources-add": ["win32.c3"],
-      "linked-libs" : []
+      "c-sources" : ["win32.c"],
+      "linked-libraries" : []
     }
   }
 }
