@@ -47,8 +47,8 @@ void changeWindowName(Window_Result window, const char* name) {
     xcb_change_property(window.src.connection, XCB_PROP_MODE_REPLACE, window.src.window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, sizeof(name), name);
 }
 
-xcb_generic_event_t* getEvent(Window_Result window) {
-   return xcb_poll_for_event(window.src.connection);
+xcb_button_press_event_t* getEvent(Window_Result window) {
+   return (xcb_button_press_event_t*)xcb_poll_for_event(window.src.connection);
 }
 
 MouseParams getMousePos(Window_Result window) {

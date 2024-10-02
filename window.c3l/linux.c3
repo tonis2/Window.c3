@@ -7,7 +7,23 @@ extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn void destroy(Window window) @extern("destroy");
 extern fn void changeWindowName(Window window, ZString name) @extern("changeWindowName");
 extern fn MouseParams getMousePos(Window window) @extern("getMousePos");
-extern fn RawEvent* getEvent(Window window) @extern("getEvent");
+extern fn KeyPressEvent* getEvent(Window window) @extern("getEvent");
+
+struct KeyPressEvent {
+    char type; 
+    char value;
+    short sequence;
+    uint time;      
+    uint  root;
+    uint  event;
+    uint  child;
+    short root_x;
+    short root_y;
+    short event_x;
+    short event_y;
+    short state;
+    char same_screen;
+}
 
 // Creates new XCB window
 fn Window new(Params params, String name) {
@@ -17,49 +33,41 @@ fn Window new(Params params, String name) {
 }
 
 fn Event Window.getEvent(&self) {
-   RawEvent* event = getEvent(*self);
-   Event event_response = Event {.type = 0};
+   KeyPressEvent* event = getEvent(*self);
+   defer free(event);
+   Event event_response = Event {.type = 0, .mouse_click = self.mouse_click};
 
    if (event != null) {
         EventType type = (EventType)event.type;
         switch (type) {
             case MOUSE_MOTION: {}
-            case MOUSE_PRESSED: {
-                KeyPressEvent* mouse_event = (KeyPressEvent*)event;
-  
+            case MOUSE_PRESSED: {  
                 event_response = Event{
                     .type = (EventType)event.type, 
-                    .value = mouse_event.value,
-                    .mouse_x = mouse_event.event_x,
-                    .mouse_y = mouse_event.event_y,
+                    .value = event.value,
+                    .mouse_x = event.event_x,
+                    .mouse_y = event.event_y,
                 };
 
-                if ((MouseButton)mouse_event.value == LEFT_MOUSE) {
-                    self.left_click = true;
+                if ((MouseButton)event.value == LEFT_MOUSE) {
+                    self.mouse_click = (MouseButton)1;
                 }
 
-                if ((MouseButton)mouse_event.value == RIGHT_MOUSE) {
-                    self.right_click = true;
+                if ((MouseButton)event.value == RIGHT_MOUSE) {
+                    self.mouse_click = (MouseButton)3;
                 }
             }
-            case MOUSE_RELEASED: {
-                KeyPressEvent* mouse_event = (KeyPressEvent*)event;
-  
+            case MOUSE_RELEASED: {  
                 event_response = Event{
                     .type = (EventType)event.type, 
-                    .value = mouse_event.value,
-                    .mouse_x = mouse_event.event_x,
-                    .mouse_y = mouse_event.event_y,
+                    .value = event.value,
+                    .mouse_x = event.event_x,
+                    .mouse_y = event.event_y,
                 };
 
-                if ((MouseButton)mouse_event.value == LEFT_MOUSE) {
-                    self.left_click = false;
+                if ((MouseButton)event.value == LEFT_MOUSE || (MouseButton)event.value == RIGHT_MOUSE) {
+                    self.mouse_click = (MouseButton)0;
                 }
-
-                if ((MouseButton)mouse_event.value == RIGHT_MOUSE) {
-                    self.right_click = false;
-                }
-
                 break;
             }
             case KEY_PRESSED:
