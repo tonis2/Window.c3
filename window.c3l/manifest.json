@@ -2,6 +2,7 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
+      "exec": ["swiftc -emit-object -parse-as-library window.c3l/window.swift"],
       "linked-libraries" : []
     },
     "linux-x64" : {
