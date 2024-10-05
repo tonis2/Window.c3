@@ -2,7 +2,7 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
-      "exec": ["swiftc -emit-object -parse-as-library window.c3l/window.swift"],
+      "exec": ["swiftc -emit-object -parse-as-library window.c3l/window.swift", "c3c compile test/main.c3 window.c3l/*.c3 vulkan.c3l/*.c3 window.o -l Cocoa.framework --output-dir build"],
       "linked-libraries" : []
     },
     "linux-x64" : {
