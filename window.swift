@@ -1,18 +1,9 @@
 import Cocoa
 
-// @objc public class Params: NSObject {
-//     var depth: CInt = 0
-//     var x: CInt = 0
-//     var y: CInt = 0
-//     var width: CInt = 0
-//     var height: CInt = 0
-//     var border_width: CInt = 0
-// }
-
 class CustomWindow {
-    let size: [Double]     
-    let position: [Double]
-    let window: NSWindow!
+    let size: [Double]     // These are never changed... should they be 'let'?
+    let position: [Double] // These are never changed... should they be 'let'?
+    let window: NSWindow! // A "Window" contains a window... that's a little odd.
 
     init(size: [Double], position: [Double], title: String, styleMasking: NSWindow.StyleMask) {
         self.size = size
@@ -29,13 +20,8 @@ class CustomWindow {
     }
 }
 
-@_cdecl("createWindow")
-public func createWindow() -> CInt {
-    let myWindow: CustomWindow = CustomWindow()
-    NSApplication.shared
-    NSApp.setActivationPolicy(.regular)
-    NSApp.run()
+let myWindow: CustomWindow = CustomWindow()
 
-    let value: CInt = 69
-    return value;
-}
+NSApplication.shared // Sets the value of `NSApp`
+NSApp.setActivationPolicy(.regular)
+NSApp.run()
