@@ -57,7 +57,7 @@ fn Event Window.getEvent(&self) {
                     self.mouse_click = (MouseButton)3;
                 }
             }
-            case MOUSE_RELEASED: {  
+            case MOUSE_RELEASED: {
                 event_response = Event{
                     .type = (EventType)event.type, 
                     .value = event.value,
