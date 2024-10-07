@@ -2,7 +2,7 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
-      "linked-libraries" : []
+      "linked-libraries" : ["Cocoa.framework"]
     },
     "linux-x64" : {
       "cflags": "-fPIE",
