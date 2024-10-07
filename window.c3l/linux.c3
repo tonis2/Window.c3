@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX || env::DARWIN);
+module c3w @if(env::LINUX);
 import std::math;
 import vk;
 import std::io;
