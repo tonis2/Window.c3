@@ -18,8 +18,8 @@ struct LinuxWindow {
 }
 
 struct Window {
-    DarwinWindow src @if(env::os_is_darwin());
-	LinuxWindow src @if(env::LINUX);
+    // DarwinWindow src @if(env::os_is_darwin());
+	LinuxWindow src @if(env::LINUX || env::DARWIN);
     Win32Window src @if(env::WIN32);
     struct screen_info {
         uint width;
