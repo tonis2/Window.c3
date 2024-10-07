@@ -526,7 +526,6 @@ fn void! main(String[] args)
 
     while (running) {
         c3w::Event event = win.getEvent();
-        
         if (event.mouse_click == LEFT_MOUSE) {
            MouseParams params = c3w::getMousePos(win);
            camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
