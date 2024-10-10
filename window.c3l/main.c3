@@ -1,6 +1,7 @@
 module c3w;
 import vk;
 import std;
+import std::os::win32;
 
 struct DarwinWindow {
     uint i;
@@ -9,6 +10,7 @@ struct DarwinWindow {
 struct Win32Window {
     vk::Hwnd window;
     vk::Hinstance instance;
+    Win32_HDC hdc;
 }
 
 struct LinuxWindow {
@@ -25,7 +27,7 @@ struct Window {
         uint width;
         uint height;
     }
-    MouseButton mouse_click;
+    Event event;
 }
 
 struct Event

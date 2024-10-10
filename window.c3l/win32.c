@@ -9,15 +9,26 @@ typedef struct Size
   uint32_t height;
 } Size;
 
+typedef struct Event
+{
+  char type;
+  char value;
+  short mouse_x;
+  short mouse_y;
+  char mouse_btn;
+} Event;
+
 typedef struct WindowSrc
 {
   HWND window;
   HINSTANCE instance;
+  HDC device;
 } WindowSrc;
 
 typedef struct Window_Result {
     WindowSrc src;
     Size screen_info;
+    Event event;
 } Window_Result;
 
 typedef struct Window_Params {
@@ -29,13 +40,6 @@ typedef struct Window_Params {
     int border_width;
 } Window_Params;
 
-typedef struct Event {
-    char type;
-    char value;
-    uint16_t mouse_x;
-    uint16_t mouse_y;
-} Event;
-
 typedef struct MouseParams {
     uint8_t type;
     uint16_t x;
@@ -44,40 +48,55 @@ typedef struct MouseParams {
     uint16_t root_y;
 } MouseParams;
 
-MouseParams getMousePos(Window_Result window) {
-
-   MouseParams params = {
-     0
-   };
-
-   return params;
-}
+char ready = 0;
 
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
-
-    case WM_CLOSE:
-          // running = false;
-          break;
-    }
+      case WS_VISIBLE: {}
+      case WM_SIZE:
+      {
+        RECT rect = {0};
+        GetClientRect(window, &rect);
+        // input->screenSize.x = (rect.right - rect.left);
+        // input->screenSize.y = (rect.bottom - rect.top);
+        break;
+      }
+      case WM_CLOSE:
+            // running = false;
+            break;
+      }
 
     return DefWindowProcA(window, msg, wParam, lParam);
 }
 
 Event getEvent(Window_Result window) {
-  UpdateWindow(window.src.window);
   Event event = {0};
   MSG message;
-  if (GetMessageW(&message, window.src.window, 0, 0) > 0) {
+  if (GetMessage(&message, window.src.window, NULL, NULL) > 0) {
       TranslateMessage(&message);
-      DispatchMessageW(&message);
+      DispatchMessage(&message);
       event.type = message.message;
       event.mouse_x = message.pt.x;
       event.mouse_y = message.pt.y;
   }
   return event;
+}
+
+MouseParams getMousePos(Window_Result window)
+{
+    POINT point = {0};
+    GetCursorPos(&point);
+    ScreenToClient(window.src.window, &point);
+
+    MouseParams params = {point.x, point.y};
+    return params;
+}
+
+ void destroy(Window_Result window) {
+    ReleaseDC(window.src.window, window.src.device);
+    DestroyWindow(window.src.window);
 }
 
 Window_Result createWindow(Window_Params params)
@@ -87,6 +106,8 @@ Window_Result createWindow(Window_Params params)
     HWND window;
     MSG msg;
     HINSTANCE instance = {0};
+    HDC device;
+
      // make sure all the members are zero-ed out to start
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_HREDRAW | CS_VREDRAW;
@@ -108,7 +129,7 @@ Window_Result createWindow(Window_Params params)
 
   window = CreateWindow(
         szWindowClass,
-        "Window title",
+        wc.lpszClassName,
         WS_OVERLAPPEDWINDOW,
         params.x, params.y,
         params.width, params.height,
@@ -118,14 +139,28 @@ Window_Result createWindow(Window_Params params)
         NULL
     );
 
+    PIXELFORMATDESCRIPTOR pfd = {
+        .nVersion = 1,
+        .iPixelType = PFD_TYPE_RGBA,
+        .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        .cColorBits = 32,
+        .cAlphaBits = 8,
+        .iLayerType = PFD_MAIN_PLANE,
+        .cDepthBits = 24,
+        .cStencilBits = 8,
+    };
+
     if (window == 0)
     {
         fprintf(stderr, "Could not open display.\n");
         exit(EXIT_FAILURE);
     }
 
-    ShowWindow(window, SW_SHOW);
+    device = GetDC(window);
 
+    ShowWindow(window, SW_SHOW);
+    UpdateWindow(window);
+    
     Window_Result result = {
         {
           window,
