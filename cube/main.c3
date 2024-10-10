@@ -8,7 +8,7 @@ import camera;
 const WIDTH = 800;
 const HEIGHT = 600;
 const VK_API_VERSION_1_3 = vk::@makeApiVersion(0,1,3,0);
-const ENABLE_VALIDATION_LAYERS = false;
+const ENABLE_VALIDATION_LAYERS = true;
 const MAX_FRAMES_IN_FLIGHT = 2;
 
 struct Vertex {
@@ -90,7 +90,7 @@ fn void! main(String[] args)
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
 
-    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor"});
+    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor", "VK_KHR_synchronization2"});
     validations.add_array({"VK_LAYER_KHRONOS_validation"});
     extensions.add_array({"VK_KHR_surface", "VK_EXT_debug_utils"});
 
@@ -157,11 +157,11 @@ fn void! main(String[] args)
         }
         $case WIN32: {
             Win32SurfaceCreateInfoKHR createInfo = {
-                vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-                null,
-                0,
-                win.src.instance,
-                win.src.window
+                .sType = vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+                .pNext = null,
+                .flags = 0,
+                .hinstance = win.src.instance,
+                .hwnd = win.src.window
             };
             vk::createWin32SurfaceKHR(instance, &createInfo, null, &surface)!!;
         }
@@ -246,7 +246,7 @@ fn void! main(String[] args)
 
 	vk::Format depth_format = vk::findDepthFormat(features: vk::FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, device: physical_device);
     SurfaceFormatKHR format = SurfaceFormatKHR {.format = vk::FORMAT_B8G8R8A8_UNORM, .colorSpace = vk::COLOR_SPACE_SRGB_NONLINEAR_KHR};
-    Extent2D extent = {.width = (uint)WIDTH, .height = (uint)HEIGHT };
+    Extent2D extent = {.width = (uint)784, .height = (uint)561 };
 
     uint min_images = capabilities.maxImageCount != 0 ? capabilities.maxImageCount : capabilities.minImageCount + 2;
 
@@ -261,7 +261,7 @@ fn void! main(String[] args)
       .setImageFormat(format.format)
       .setSurface(surface)
       .setImageArrayLayers(1)
-      .setImageExtent({ .width = (uint)WIDTH, .height = (uint)HEIGHT });
+      .setImageExtent(extent);
 
     swapchain = swapchain_info.build(device)!;
     swapchain_images = swapchain.getImages(device, swapchain_info.minImageCount)!;
@@ -499,8 +499,8 @@ fn void! main(String[] args)
             .sType = vk::STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = render_pass,
             .attachmentCount = 1,
-            .width = WIDTH,
-            .height = HEIGHT,
+            .width = extent.width,
+            .height = extent.height,
             .layers = 1,
         },
         swapchain_views
@@ -523,7 +523,6 @@ fn void! main(String[] args)
     uint frame = 0;
 
     MouseParams last_params;
-
     while (running) {
         c3w::Event event = win.getEvent();
         if (event.mouse_click == LEFT_MOUSE) {
@@ -533,12 +532,12 @@ fn void! main(String[] args)
            last_params = params;
         }
         
-        switch (event.type) {
-            case c3w::MOUSE_RELEASED: {}
-            case c3w::KEY_PRESSED: {
-                if (event.value == c3w::ESCAPE) running = false;
-            }
-        }
+        // switch (event.type) {
+        //     case c3w::MOUSE_RELEASED: {}
+        //     case c3w::KEY_PRESSED: {
+        //         if (event.value == c3w::ESCAPE) running = false;
+        //     }
+        // }
 
         Fence frame_fence = frame_fences[frame];
         Semaphore wait_semaphore = wait_semaphores[frame];
@@ -621,5 +620,4 @@ fn void! main(String[] args)
 
     device.free();
     instance.free();
-
 }
