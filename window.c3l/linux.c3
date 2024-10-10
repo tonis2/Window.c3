@@ -35,12 +35,13 @@ fn Window new(Params params, String name) {
 fn Event Window.getEvent(&self) {
    KeyPressEvent* event = getEvent(*self);
    defer free(event);
-   Event event_response = Event {.type = 0, .mouse_click = self.mouse_click};
+   Event event_response = self.prev_event;
 
    if (event != null) {
         EventType type = (EventType)event.type;
         switch (type) {
             case MOUSE_MOTION: {}
+            case MOUSE_RELEASED:
             case MOUSE_PRESSED: {  
                 event_response = Event{
                     .type = (EventType)event.type, 
@@ -48,38 +49,23 @@ fn Event Window.getEvent(&self) {
                     .mouse_x = event.event_x,
                     .mouse_y = event.event_y,
                 };
-
-                if ((MouseButton)event.value == LEFT_MOUSE) {
-                    self.mouse_click = (MouseButton)1;
+                if (event.value <= 5) {
+                    if (type == MOUSE_RELEASED) event_response.mouse_click = MouseButton.NONE;
+                    if (type == MOUSE_PRESSED) event_response.mouse_click = (MouseButton)event.value;
                 }
-
-                if ((MouseButton)event.value == RIGHT_MOUSE) {
-                    self.mouse_click = (MouseButton)3;
-                }
-            }
-            case MOUSE_RELEASED: {
-                event_response = Event{
-                    .type = (EventType)event.type, 
-                    .value = event.value,
-                    .mouse_x = event.event_x,
-                    .mouse_y = event.event_y,
-                };
-
-                if ((MouseButton)event.value == LEFT_MOUSE || (MouseButton)event.value == RIGHT_MOUSE) {
-                    self.mouse_click = (MouseButton)0;
-                }
+                self.prev_event = event_response;
                 break;
             }
             case KEY_PRESSED:
             case KEY_RELEASED: {
                 KeyPressEvent* key_event = (KeyPressEvent*)event;
                 event_response = Event{ .type = (EventType)event.type, .value = key_event.value};
+                self.prev_event = event_response;
                 break;
             }
             default: {};
         }
     }
-
     return event_response;
 }
 
