@@ -27,7 +27,6 @@ struct Window {
         uint width;
         uint height;
     }
-    Event event;
 }
 
 struct Event

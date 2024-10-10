@@ -15,6 +15,10 @@ fn Window new(Params params, String name) {
 
 fn Event Window.getEvent(self) {
     Event event = getEvent(self);
+    if (event.value > 0 && event.value <= 5) {
+        event.mouse_click = (MouseButton)event.value;
+    }
+   
     return event;
 }
 

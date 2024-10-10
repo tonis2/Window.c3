@@ -28,7 +28,6 @@ typedef struct WindowSrc
 typedef struct Window_Result {
     WindowSrc src;
     Size screen_info;
-    Event event;
 } Window_Result;
 
 typedef struct Window_Params {
@@ -77,7 +76,9 @@ Event getEvent(Window_Result window) {
   if (GetMessage(&message, window.src.window, NULL, NULL) > 0) {
       TranslateMessage(&message);
       DispatchMessage(&message);
+      ScreenToClient(window.src.window, &message.pt);
       event.type = message.message;
+      event.value = message.wParam;
       event.mouse_x = message.pt.x;
       event.mouse_y = message.pt.y;
   }
