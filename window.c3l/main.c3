@@ -1,3 +1,6 @@
+module std::core::env;
+$exec("env.c3");
+
 module c3w;
 import vk;
 import std;

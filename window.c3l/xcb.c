@@ -56,8 +56,7 @@ void changeWindowName(Window_Result window, const char *name)
 
 xcb_button_press_event_t *getEvent(Window_Result window)
 {
-    xcb_button_press_event_t *event = (xcb_button_press_event_t *)xcb_poll_for_event(window.src.connection);
-    return event;
+    return (xcb_button_press_event_t *)xcb_poll_for_event(window.src.connection);
 }
 
 MouseParams getMousePos(Window_Result window)
