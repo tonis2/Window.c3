@@ -1,8 +1,9 @@
-module c3w @if(env::WIN32);
+module c3w @if(env::WIN32) @link(env::WIN32, env::VKPATH);
 import std::math;
 import std::os::win32;
 import vk;
 import std::io;
+
 
 extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn Event getEvent(Window window) @extern("getEvent");
