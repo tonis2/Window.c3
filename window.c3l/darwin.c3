@@ -6,8 +6,8 @@ import std::io;
 extern fn int createWindow(Params params) @extern("createWindow");
 
 fn void new(Params params, String name) {
-    int window = createWindow(params);
-    io::printfn("%d", window);
+    createWindow(params);
+    // io::printfn("%d", window);
 }
 
 fn void Window.free(self) {

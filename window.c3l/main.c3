@@ -1,6 +1,15 @@
 module c3w;
 import vk;
 import std;
+import std::io::file;
+
+fn void init() @init {
+    if (file::is_file("./env.c3")) {
+        io::printfn("There is env file");
+    }
+
+    io::printfn("There is no env file");
+}
 
 struct DarwinWindow {
     uint i;

@@ -2,16 +2,17 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
-      "exec": ["swiftc -emit-object -parse-as-library window.c3l/window.swift", "c3c compile test/main.c3 window.c3l/*.c3 vulkan.c3l/*.c3 window.o -l Cocoa.framework -l /usr/lib/swift/libswiftCore.dylib --output-dir build"],
-      "linked-libraries" : ["CoreFoundation.framework", "Cocoa.framework"]
+      "linked-libraries" : ["CoreFoundation.framework", "Cocoa.framework"],
+      "c-sources" : ["native/cocoa.m"],
+      "cflags": "-c -framework Foundation -framework Cocoa -fPIC"
     },
     "linux-x64" : {
       "cflags": "-fPIE",
-      "c-sources" : ["xcb.c"],
+      "c-sources" : ["native/xcb.c"],
       "linked-libraries" : ["X11", "Xrandr", "X11-xcb", "xcb"]
     },
     "windows-x64" : {
-      "c-sources" : ["win32.c"],
+      "c-sources" : ["native/win32.c"],
       "linked-libraries" : []
     }
   }
