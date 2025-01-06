@@ -19,36 +19,18 @@ def ImageList = List(<vk::Image>);
 def ImageViewList = List(<vk::ImageView>);
 def FrameBufferList = List(<vk::Framebuffer>);
 
+
+struct DeviceQueue {
+    Queue handle;
+    uint index;
+}
+
 fault ContextErrors
 {
     FAILED_GETTING_EXTENSIONS,
     EXTENSION_NOT_SUPPORTED,
     FAILED_GETTING_DEVICE
 }
-
-struct QueueFamily {
-    int graphics;
-    int present;
-    int compute;
-    vk::Queue graphics_handle;
-    vk::Queue present_handle;
-    vk::Queue compute_handle;
-}
-
-fn bool QueueFamily.is_ready(&self)
-{
-    return self.graphics >= 0 && self.present >= 0;
-}
-
-// struct DeviceInfo {
-//     Device device;
-//     PhysicalDevice physical_device;
-//     Queue graphics_queue;
-//     QueueFamily queue_family;
-//     SurfaceFormatList surface_formats;
-//     PresentModeList present_modes;
-//     SurfaceCapabilitiesKHR capabilities;
-// }
 
 struct Shader {
     ShaderModule vert_mod;
@@ -138,32 +120,6 @@ fn CommandBufferList! Device.createCommandBuffers(self, CommandPool pool, uint c
     return buffers;
 }
 
-fn FrameBufferList! Device.createFrameBuffers(self, FramebufferCreateInfo* info,  ImageViewList swapchain_views)
-{
-    FrameBufferList buffers;
-    for (int i = 0; i < swapchain_views.len(); ++i) {
-        Framebuffer frame_buffer;
-        info.pAttachments = &swapchain_views[i];
-        vk::createFramebuffer(self, info, null, &frame_buffer)!;
-        buffers.push(frame_buffer);
-    }
-
-    return buffers;
-}
-
-// /*fn Extent2D DeviceInfo.getExtent(self) {
-//     int width, height;
-//     glfw::getFramebufferSize(self.window, (uint*)&width, (uint*)&height);
-//     Extent2D actualExtent = {
-//      width,
-//      height
-//     };
-
-//     actualExtent.width = math::clamp(actualExtent.width, self.capabilities.minImageExtent.width, self.capabilities.maxImageExtent.width);
-//     actualExtent.height = math::clamp(actualExtent.height, self.capabilities.minImageExtent.height,self.capabilities.maxImageExtent.height);
-//     return actualExtent;
-// }*/
-
 fn void Device.waitIdle(self) {
  if (catch err = vk::deviceWaitIdle(self)) {
     io::printfn("failed to wait idle");
@@ -176,13 +132,13 @@ fn vk::Queue Device.getQueue(self, uint index) {
     return response;
 }
 
-macro void! Device.@single_time_command(self, Queue queue, uint queue_index; @body(CommandBuffer buffer))
+macro void! Device.@single_time_command(self, DeviceQueue queue; @body(CommandBuffer buffer))
 {
     CommandPool command_pool;
     CommandPoolCreateInfo pool_info = {
         .sType = STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext = null,
-        .queueFamilyIndex = queue_index,
+        .queueFamilyIndex = queue.index,
     };
     createCommandPool(self, &pool_info, null, &command_pool)!;
     CommandBufferAllocateInfo alloc_info = {
@@ -208,8 +164,8 @@ macro void! Device.@single_time_command(self, Queue queue, uint queue_index; @bo
         .commandBufferCount = 1,
         .pCommandBuffers = &command_buffer
     };
-    queueSubmit(queue, 1, &submitInfo, null)!;
-    queueWaitIdle(queue)!;
+    queueSubmit(queue.handle, 1, &submitInfo, null)!;
+    queueWaitIdle(queue.handle)!;
     freeCommandBuffers(self, command_pool, 1, &command_buffer);
     destroyCommandPool(self, command_pool, null);
 }
@@ -515,6 +471,13 @@ fn void FenceList.release(self, vk::Device device) {
   self.free();
 }
 
+fn void FrameBufferList.release(self, vk::Device device) {
+  for (uint i = 0; i < self.len(); ++i) {
+      vk::destroyFramebuffer(device, self.entries[i], null);
+  }
+  self.free();
+}
+
 fn void SemaphoreList.release(self, vk::Device device) {
   for (uint i = 0; i < self.len(); ++i) {
       vk::destroySemaphore(device, self.entries[i], null);
@@ -532,6 +495,10 @@ fn void! Fence.reset(&self, vk::Device device) {
 
 fn void SurfaceKHR.free(self, Instance instance) {
     destroySurfaceKHR(instance, self, null);
+}
+
+fn void ShaderModule.free(self, Device device) {
+    destroyShaderModule(device, self, null);
 }
 
 fn void DescriptorImageInfo.free(&self, Device device)

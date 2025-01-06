@@ -2,12 +2,95 @@ module c3w @if(env::LINUX);
 import std::math;
 import vk;
 import std::io;
+import std::core::types;
 
-extern fn Window createWindow(Params params) @extern("createWindow");
-extern fn void destroy(Window window) @extern("destroy");
-extern fn void changeWindowName(Window window, ZString name) @extern("changeWindowName");
-extern fn MouseParams getMousePos(Window window) @extern("getMousePos");
-extern fn KeyPressEvent* getEvent(Window window) @extern("getEvent");
+def XCB_setup = void*;
+
+extern fn vk::Display openDisplay(char* name) @extern("XOpenDisplay");
+extern fn vk::Connection xcbConnect(char* name, uint* window) @extern("xcb_connect");
+extern fn vk::Connection xcbCreateWindow(char* name, uint* window) @extern("xcb_create_window");
+extern fn XCB_setup xcbGetSetup(vk::Connection connection) @extern("xcb_get_setup");
+extern fn XScreenIterator* xcbRootsIterator(XCB_setup setup) @extern("xcb_setup_roots_iterator");
+extern fn vk::Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
+extern fn vk::Window xcbMapWindow(vk::Connection con, vk::Window win) @extern("xcb_map_window");
+extern fn vk::Window xcbFlush(vk::Connection con) @extern("xcb_flush");
+extern fn KeyPressEvent* xcbPollEvent(vk::Connection con) @extern("xcb_poll_for_event");
+extern fn void xcbChangeProperty(vk::Connection con, XcbProp mode, vk::Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
+extern fn uint xcbQueryPointer(vk::Connection con, vk::Window window) @extern("xcb_query_pointer");
+extern fn KeyPressEvent* xcbQueryPointerReply(vk::Connection con, uint cookie, void* err) @extern("xcb_query_pointer_reply");
+extern fn uint xcbDestroy(vk::Connection con, vk::Window window) @extern("xcb_destroy_window");
+extern fn uint xcbDisconnect(vk::Connection con) @extern("xcb_disconnect");
+
+extern fn uint createWindow(
+    vk::Connection    c,
+    char              depth,
+    vk::Window        window,
+    uint              parent,
+    short             x,
+    short             y,
+    ushort            width,
+    ushort            height,
+    ushort            border_width,
+    ushort            _class,
+    uint              visual,
+    uint              value_mask,
+    void*             value_list
+) @extern("xcb_create_window");
+
+enum XcbProp : uint (uint value)
+{
+    PROP_MODE_REPLACE = 0,
+    PROP_MODE_PREPEND = 1,
+    PROP_MODE_APPEND = 2,
+}
+
+enum XcbEventMask : uint (uint value)
+{
+    CW_EVENT_MASK = 2048,
+    CW_CURSOR = 16384,
+    EVENT_MASK_NO_EVENT = 0,
+    EVENT_MASK_EXPOSURE = 32768,
+    EVENT_MASK_BUTTON_PRESS = 4,
+    EVENT_MASK_BUTTON_RELEASE = 8,
+    EVENT_MASK_KEY_PRESS = 1,
+    EVENT_MASK_KEY_RELEASE = 2,
+    EVENT_MASK_POINTER_MOTION = 64,
+    EVENT_MASK_POINTER_MOTION_HINT = 128,
+    EVENT_MASK_STRUCTURE_NOTIFY = 131072,
+    EVENT_MASK_VISIBILITY_CHANGE = 65536,
+}
+
+enum XcbPropMode : uint (uint value)
+{
+    PROP_MODE_REPLACE = 0,
+    PROP_MODE_PREPEND = 1,
+    PROP_MODE_APPEND = 2,
+}
+
+struct XscreenData {
+    uint   root;
+    uint   default_colormap;
+    uint   white_pixel;
+    uint   black_pixel;
+    uint   current_input_masks;
+    ushort width_in_pixels;
+    ushort height_in_pixels;
+    ushort width_in_millimeters;
+    ushort height_in_millimeters;
+    ushort min_installed_maps;
+    ushort max_installed_maps;
+    uint   root_visual;
+    char   backing_stores;
+    char   save_unders;
+    char   root_depth;
+    char   allowed_depths_len;
+}
+
+struct XScreenIterator {
+    inline XscreenData data;
+    int         rem;
+    int         index;
+}
 
 struct KeyPressEvent {
     char type; 
@@ -25,42 +108,81 @@ struct KeyPressEvent {
     char same_screen;
 }
 
+
 // Creates new XCB window
-fn Window new(Params params, String name) {
-    Window window = createWindow(params);
-    changeWindowName(window, (ZString)name);
-    return window;
+fn Window! new(Params params, String name) {
+    Display dpy = openDisplay(null);
+
+    if (!dpy)
+    {
+        io::printfn("Failed to open display");
+        return WindowError.FAILED_OPENING_WINDOW?;
+    }
+
+    vk::Connection connection = xcbConnect(null, null);
+    XCB_setup setup = xcbGetSetup(connection);
+    XScreenIterator* screen_iterator = xcbRootsIterator(setup);
+
+    vk::Window window = xcbWindowId(connection);
+
+    uint mask = XcbEventMask.CW_EVENT_MASK.value ;
+    uint[] event_masks = {XcbEventMask.EVENT_MASK_EXPOSURE.value | XcbEventMask.EVENT_MASK_KEY_PRESS.value | XcbEventMask.EVENT_MASK_KEY_RELEASE.value |
+                          XcbEventMask.EVENT_MASK_BUTTON_PRESS.value | XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value | XcbEventMask.EVENT_MASK_POINTER_MOTION.value };
+
+    uint cookie = createWindow(
+                        connection,
+                        0,
+                        window,
+                        screen_iterator.data.root,
+                        (short)params.x, 
+                        (short)params.y,
+                        (short)params.width,
+                        (short)params.height,
+                        (short)params.border_width,
+                        1,
+                        screen_iterator.data.root_visual,
+                        mask,
+                        &event_masks[0]
+                    );
+
+    xcbMapWindow(connection, window);
+    xcbFlush(connection);
+
+    // Change window name
+    // XCB_ATOM_WM_NAME, XCB_ATOM_STRING
+    xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, 39, 31, 8, name.len, name);
+
+    return Window {
+       .src = LinuxWindow {
+            .window = window,
+            .connection = connection,
+            .display = dpy,
+       },
+       .width = 200,
+       .height = 200
+    };
 }
 
 fn Event Window.getEvent(&self) {
-   KeyPressEvent* event = getEvent(*self);
+   KeyPressEvent* event = xcbPollEvent(self.src.connection);
+   Event event_response;
+
    defer free(event);
-   Event event_response = self.prev_event;
 
    if (event != null) {
-        EventType type = (EventType)event.type;
+        EventType type = @enum_from_value(EventType, value, event.type)!!;
         switch (type) {
-            case MOUSE_MOTION: {}
+            case KEY_PRESSED:
+            case KEY_RELEASED:
+            case MOUSE_MOTION:
             case MOUSE_RELEASED:
             case MOUSE_PRESSED: {  
                 event_response = Event{
-                    .type = (EventType)event.type, 
-                    .value = event.value,
+                    .type = type, 
+                    .value = @enum_from_value(EventKey, value, event.value)!!,
                     .mouse_x = event.event_x,
                     .mouse_y = event.event_y,
                 };
-                if (event.value <= 5) {
-                    if (type == MOUSE_RELEASED) event_response.mouse_click = MouseButton.NONE;
-                    if (type == MOUSE_PRESSED) event_response.mouse_click = (MouseButton)event.value;
-                }
-                self.prev_event = event_response;
-                break;
-            }
-            case KEY_PRESSED:
-            case KEY_RELEASED: {
-                KeyPressEvent* key_event = (KeyPressEvent*)event;
-                event_response = Event{ .type = (EventType)event.type, .value = key_event.value};
-                self.prev_event = event_response;
                 break;
             }
             default: {};
@@ -71,5 +193,6 @@ fn Event Window.getEvent(&self) {
 
 // Free and destroys window instance
 fn void Window.free(self) {
-    destroy(self);
+   xcbDestroy(self.src.connection, self.src.window);
+   xcbDisconnect(self.src.connection);
 }
