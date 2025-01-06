@@ -12,11 +12,20 @@ fn void! main(String[] args)
             .y = 0
         },
         name: "Cube"
-    );
+    )!!;
     defer win.free();
     
     bool running = true;
     while (running) {
         c3w::Event event = win.getEvent();
+        switch (event.type) {
+            case MOUSE_RELEASED: {}
+            case KEY_PRESSED: {
+                if (event.value == ESCAPE) running = false;
+            }
+            default: {
+                
+            }
+        }
     }
 }

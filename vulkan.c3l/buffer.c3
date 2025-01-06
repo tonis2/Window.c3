@@ -91,6 +91,7 @@ fn void Allocation.free(&self) {
     freeMemory(self.device, self.memory, null);
 }
 
+
 struct MemoryBlock {
     uint id;
     BufferType type;
@@ -99,12 +100,65 @@ struct MemoryBlock {
     DeviceMemory memory;
     ulong size;
     ulong offset;
+    ulong used_size;
     void* mapped;
     bool is_used;
     DeviceAddress address;
+    Allocation* allocator;
 }
 
-fn MemoryBlock! Device.staging_buffer(self, usz size, void* data, PhysicalDevice pdevice)
+
+// macro MemoryBlock.@upload_from_stage(&self) {
+// 	$for (var $i = 0; $i < $vacount; $i++)
+// 		{
+// 			$vatype[$i] x;
+// 		}
+// 		io::printfn("%s", $vatype[$i].nameof);
+// 	$endfor;
+// }
+
+macro void! @upload_from_stage(usz size, DeviceQueue queue, Allocation allocator; @body(MemoryBlock stage_buffer, CommandBuffer command_buffer)) {
+    Device device = allocator.device;
+    PhysicalDevice pdevice = allocator.pdevice;
+
+    Buffer staging_buffer_info = BufferCreateInfo {
+      .sType = STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .pNext = null,
+      .flags = 0,
+      .size = size,
+      .usage = BUFFER_USAGE_TRANSFER_SRC_BIT,
+      .sharingMode = SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = 0,
+      .pQueueFamilyIndices = null,
+    }.build(device)!;
+
+    MemoryRequirements mem_reqs = staging_buffer_info.memoryRequirements(device);
+    DeviceMemory memory = memoryAllocateInfo()
+                .setAllocationSize(mem_reqs.size)
+                .setMemoryTypeIndex(pdevice.getMemoryType(MEMORY_PROPERTY_HOST_VISIBLE_BIT | MEMORY_PROPERTY_HOST_COHERENT_BIT,  mem_reqs.memoryTypeBits))
+                .build(device)!;
+
+    bindBufferMemory(device, staging_buffer_info, memory, 0)!;
+    void* mapped;
+    vk::mapMemory(device, memory, 0, size, 0, &mapped)!;
+
+
+    MemoryBlock stage_buffer = MemoryBlock {
+        .buffer = staging_buffer_info,
+        .memory = memory,
+        .type = STAGING_BUFFER,
+        .mapped = mapped
+    };
+
+    device.@single_time_command(queue: queue; CommandBuffer command_buffer) {
+        @body(stage_buffer, command_buffer);
+    }!;
+
+    stage_buffer.free(device);
+}
+
+
+fn MemoryBlock! create_staging_buffer(usz size, Device device, PhysicalDevice pdevice)
 {
     Buffer staging_buffer = BufferCreateInfo {
       .sType = STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -115,24 +169,23 @@ fn MemoryBlock! Device.staging_buffer(self, usz size, void* data, PhysicalDevice
       .sharingMode = SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 0,
       .pQueueFamilyIndices = null,
-    }.build(self)!;
+    }.build(device)!;
 
-    MemoryRequirements mem_reqs = staging_buffer.memoryRequirements(self);
+    MemoryRequirements mem_reqs = staging_buffer.memoryRequirements(device);
     DeviceMemory memory = memoryAllocateInfo()
                 .setAllocationSize(mem_reqs.size)
                 .setMemoryTypeIndex(pdevice.getMemoryType(MEMORY_PROPERTY_HOST_VISIBLE_BIT | MEMORY_PROPERTY_HOST_COHERENT_BIT,  mem_reqs.memoryTypeBits))
-                .build(self)!;
+                .build(device)!;
 
-    bindBufferMemory(self, staging_buffer, memory, 0)!;
+    bindBufferMemory(device, staging_buffer, memory, 0)!;
     void* mapped;
-    vk::mapMemory(self, memory, 0, size, 0, &mapped)!;
-    mem::copy(mapped, data, size);
-    // vk::unmapMemory(self, memory);
+    vk::mapMemory(device, memory, 0, size, 0, &mapped)!;
 
     return MemoryBlock {
         .buffer = staging_buffer,
         .memory = memory,
         .type = STAGING_BUFFER,
+        .mapped = mapped
     };
 }
 
@@ -152,67 +205,64 @@ fn void MemoryBlock.free(&self, Device device)
     }
 }
 
-fn MemoryBlock MemoryBlock.getAddress(&self, Device device)
+fn void MemoryBlock.upload(&self, void* data, ulong size, usz offset = 0)
 {
-    BufferDeviceAddressInfo address_info = {
-        .sType = STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = self.buffer
-    };
-    self.address = getBufferDeviceAddress(device, &address_info);
-    return *self;
+    mem::copy(self.mapped + self.offset + offset, data, size);
 }
 
-fn void MemoryBlock.upload(&self, void* data, ulong size, Device device)
+fn void MemoryBlock.push(&self, void* data, ulong size, usz offset = 0)
 {
-    mem::copy(self.mapped + self.offset, data, size);
+    mem::copy(self.mapped + self.offset + offset + self.used_size, data, size);
+    self.used_size += size;
 }
 
-fn MemoryBlock! vk::BufferCreateInfo.bind(self, Allocation* allocation)
+fn MemoryBlock! vk::BufferCreateInfo.bind(self, Allocation* allocator)
 {
-    vk::Buffer buffer = self.build(allocation.device)!;
-    MemoryRequirements mem_reqs = buffer.memoryRequirements(allocation.device);
-    uint memory_type = allocation.pdevice.getMemoryType(allocation.properties, mem_reqs.memoryTypeBits);
+    vk::Buffer buffer = self.build(allocator.device)!;
+    MemoryRequirements mem_reqs = buffer.memoryRequirements(allocator.device);
+    uint memory_type = allocator.pdevice.getMemoryType(allocator.properties, mem_reqs.memoryTypeBits);
 
     if ((MemoryPropertyFlagBits)self.usage & BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) {
-        MemoryRequirements desc_mem_reqs = self.descriptorMemoryRequirements(allocation.pdevice);
+        MemoryRequirements desc_mem_reqs = self.descriptorMemoryRequirements(allocator.pdevice);
         mem_reqs.size = desc_mem_reqs.size;
         mem_reqs.alignment = desc_mem_reqs.alignment;
     }
 
-    if (memory_type != allocation.memory_type) {
-        io::printfn("Allocation memory type is %d, but buffer requires %d", allocation.memory_type, memory_type);
+    if (memory_type != allocator.memory_type) {
+        io::printfn("Allocation memory type is %d, but buffer requires %d", allocator.memory_type, memory_type);
     }
 
-    if (allocation.size - allocation.used_size < mem_reqs.size) {
+    if (allocator.size - allocator.used_size < mem_reqs.size) {
        io::printfn("Allocation has no enough free memory");
        return BufferError.ALLOCATION_HAS_NO_ROOM?;
     }
 
-    usz offset = alignUp(allocation.used_size, mem_reqs.alignment);
-    bindBufferMemory(allocation.device, buffer, allocation.memory, offset)!;
+    usz offset = alignUp(allocator.used_size, mem_reqs.alignment);
+    bindBufferMemory(allocator.device, buffer, allocator.memory, offset)!;
     usz size = alignUp(mem_reqs.size, mem_reqs.alignment);
 
     MemoryBlock block = {
         .is_used = true,
         .offset = offset,
-        .id = allocation.buffer_count - 1,
+        .id = allocator.buffer_count - 1,
         .buffer = buffer,
-        .memory = allocation.memory,
+        .memory = allocator.memory,
         .size = size,
-        .mapped = allocation.mapped,
+        .mapped = allocator.mapped,
         .type = BufferType.BUFFER,
+        .allocator = allocator
     };
 
-    allocation.used_size += size;
-    allocation.buffer_count += 1;
-    allocation.blocks.push(block);
+    allocator.used_size += size;
+    allocator.buffer_count += 1;
+    allocator.blocks.push(block);
 
     if ((MemoryPropertyFlagBits)self.usage & BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
         BufferDeviceAddressInfo address_info = {
           .sType = STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
           .buffer = buffer
         };
-        block.address = getBufferDeviceAddress(allocation.device, &address_info);
+        block.address = getBufferDeviceAddress(allocator.device, &address_info);
     }
 
     return block;

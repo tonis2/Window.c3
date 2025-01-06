@@ -5,9 +5,7 @@
       "linked-libraries" : ["Cocoa.framework"]
     },
     "linux-x64" : {
-      "cflags": "-fPIE",
-      "c-sources" : ["xcb.c"],
-      "linked-libraries" : ["X11", "Xrandr", "X11-xcb", "xcb"]
+      "linked-libraries" : ["X11", "xcb"]
     },
     "windows-x64" : {
       "c-sources" : ["win32.c"],

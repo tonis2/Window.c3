@@ -8,7 +8,7 @@ import camera;
 const WIDTH = 800;
 const HEIGHT = 600;
 const VK_API_VERSION_1_3 = vk::@makeApiVersion(0,1,3,0);
-const ENABLE_VALIDATION_LAYERS = true;
+const ENABLE_VALIDATION_LAYERS = false;
 const MAX_FRAMES_IN_FLIGHT = 2;
 
 struct Vertex {
@@ -57,10 +57,13 @@ ushort[] indices = {
     20, 21, 22,     20, 22, 23    // left
 };
 
+// Shader data
+char[*] shader = $embed("./shaders/shader.spv");
+
 Instance instance;
 DebugUtilsMessengerEXT debug_messenger;
 PhysicalDevice physical_device;
-QueueFamily queue_family;
+DeviceQueue graphics_queue;
 Device device;
 SurfaceKHR surface;
 SwapchainKHR swapchain;
@@ -82,16 +85,15 @@ fn void! main(String[] args)
             .y = 0
         },
         name: "Cube"
-    );
+    )!!;
     defer win.free();
 
     // io::printfn("connection %p window %d", win.src.connection, win.src.window);
-    io::printfn("(Screen) width %d height %d", win.screen_info.width, win.screen_info.height);
+    io::printfn("(Screen) width %d height %d", win.width, win.height);
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
 
-    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor", "VK_KHR_synchronization2"});
-    validations.add_array({"VK_LAYER_KHRONOS_validation"});
+    device_extensions.add_array({"VK_KHR_swapchain", "VK_KHR_push_descriptor"});
     extensions.add_array({"VK_KHR_surface", "VK_EXT_debug_utils"});
 
     if (env::OS_TYPE == MACOS) {
@@ -129,6 +131,8 @@ fn void! main(String[] args)
 
     // Debug enabled
     if (ENABLE_VALIDATION_LAYERS) {
+      validations.add_array({"VK_LAYER_KHRONOS_validation"});
+
       vk::checkValidationLayersSupport(validations)!!;
       instanceInfo.enabledLayerCount = (uint)validations.len();
       instanceInfo.ppEnabledLayerNames = (char*)validations.entries;
@@ -152,16 +156,15 @@ fn void! main(String[] args)
                 win.src.connection,
                 win.src.window,
             };
-
             vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
         }
         $case WIN32: {
             Win32SurfaceCreateInfoKHR createInfo = {
-                .sType = vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-                .pNext = null,
-                .flags = 0,
-                .hinstance = win.src.instance,
-                .hwnd = win.src.window
+                vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+                null,
+                0,
+                win.src.instance,
+                win.src.window
             };
             vk::createWin32SurfaceKHR(instance, &createInfo, null, &surface)!!;
         }
@@ -169,71 +172,74 @@ fn void! main(String[] args)
     $endswitch
 
     DeviceList devices = instance.getDevices()!!;
-    bool found_device = false;
 
     foreach (entry: devices) {
-        QueueFamily queue;
+        int queue_index = -1;
         // Check for device extension support
         bool supports_extensions = entry.checkExtensionSupport(device_extensions)!!;
         QueuePropertiesList queue_properties = entry.getQueueProperties()!!;
 
-        queue.graphics = queue_properties.find(fn (usz index, QueueFamilyProperties props) => (QueueFlagBits)props.queueFlags & vk::QUEUE_GRAPHICS_BIT != 0);
-        if (surface.checkSurfaceSupport(queue.graphics, entry)!!) queue.present = queue.graphics;
+        queue_index = queue_properties.find(fn (usz index, QueueFamilyProperties props) => 
+        (QueueFlagBits)props.queueFlags & vk::QUEUE_GRAPHICS_BIT != 0 && (QueueFlagBits)props.queueFlags & vk::QUEUE_TRANSFER_BIT);
 
-        if (queue.is_ready() && supports_extensions) {
+        PhysicalDeviceProperties properties;
+        vk::getPhysicalDeviceProperties(entry, &properties);
+        assert(surface.checkSurfaceSupport((usz)queue_index, entry)!!);
+        
+        if (queue_index >= 0 && supports_extensions && properties.vendorID != 0) {
+            io::printfn("Device selected %s", (ZString)properties.deviceName[0..]);
             physical_device = entry;
-            queue_family = queue;
-            found_device = true;
+            graphics_queue.index = queue_index;
+            break;
         }
+    }
+
+    if (physical_device == null) {
+        io::printfn("Found no suitable device");
+        return;
     }
 
     devices.free();
 
-    if (!found_device) {
-      io::printfn("Did not found suitable device!");
-      return;
-    }
+   PhysicalDeviceVulkan13Features vulkan13Features = {
+        .sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext = null,
+    };
 
-    // // Setup Vulkan extensions configuration
-    PhysicalDeviceProperties2 deviceProps2 = vk::physicalDeviceProperties2()
-                                                .setNext(&&vk::physicalDevicePushDescriptorProperties().setMaxPushDescriptors(1));
+    PhysicalDeviceVulkan12Features vulkan12Features = {
+        .sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &vulkan13Features,
+    };
 
-	vk::getPhysicalDeviceProperties2(physical_device, &deviceProps2);
+    PhysicalDeviceVulkan11Features vulkan11Features = {
+        .sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext = &vulkan12Features,
+    };
 
-	PhysicalDeviceDescriptorIndexingFeatures device_indexing_feature = {
-		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-	};
+    PhysicalDeviceFeatures2 device_features = {
+        .sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &vulkan11Features,
+    };
 
-	PhysicalDeviceBufferDeviceAddressFeatures buffer_device_feature = {
-		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
-		.pNext = &device_indexing_feature,
-		.bufferDeviceAddress = vk::TRUE,
-		.bufferDeviceAddressCaptureReplay = vk::TRUE
-	};
-	PhysicalDeviceSynchronization2Features syncronisation2_feature = {
-		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-		.pNext = &buffer_device_feature,
-		.synchronization2 = vk::TRUE
-	};
-
-	PhysicalDeviceFeatures2 device_features = {
-		.sType = vk::STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &syncronisation2_feature,
-	};
-
-	vk::getPhysicalDeviceFeatures2(physical_device, &device_features);
+    vk::getPhysicalDeviceFeatures2(physical_device, &device_features);
 
 	DeviceQueueCreateInfo graphicsInfo = vk::deviceQueueCreateInfo()
-	.setQueueFamilyIndex(queue_family.graphics)
+	.setQueueFamilyIndex(graphics_queue.index)
 	.setQueuePriorities({1.0});
 
 	device = vk::deviceCreateInfo()
 		.setQueueCreateInfos({ graphicsInfo })
 		.setEnabledExtensionNames(device_extensions.array_view())
 		.setNext(&device_features)
-		.build(physical_device)!;
+		.build(physical_device)!!;
 
-	queue_family.graphics_handle = device.getQueue(queue_family.graphics);
+
+    defer {
+        device.free();
+        instance.free();
+    }
+
+    graphics_queue.handle = device.getQueue(graphics_queue.index);
 
 	SurfaceFormatList surface_formats = surface.getFormats(physical_device)!;
 	PresentModeList present_modes = surface.getPresentModes(physical_device)!;
@@ -246,11 +252,11 @@ fn void! main(String[] args)
 
 	vk::Format depth_format = vk::findDepthFormat(features: vk::FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, device: physical_device);
     SurfaceFormatKHR format = SurfaceFormatKHR {.format = vk::FORMAT_B8G8R8A8_UNORM, .colorSpace = vk::COLOR_SPACE_SRGB_NONLINEAR_KHR};
-    Extent2D extent = {.width = (uint)784, .height = (uint)561 };
 
     uint min_images = capabilities.maxImageCount != 0 ? capabilities.maxImageCount : capabilities.minImageCount + 2;
+    Extent2D extent = capabilities.maxImageExtent;
 
-    SwapchainCreateInfoKHR swapchain_info = vk::swapchainCreateInfo()
+    SwapchainCreateInfoKHR swapchain_info = vk::swapchainCreateInfoKHR()
       .setMinImageCount(min_images)
       .setImageUsage(vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
       .setImageSharingMode(vk::SHARING_MODE_EXCLUSIVE)
@@ -289,8 +295,8 @@ fn void! main(String[] args)
         swapchain_views.push(view);
     }
 
-    // Create command pool
-    CommandPool command_pool = device.createCommandPool(queue: queue_family.graphics)!;
+    //Create command pool
+    CommandPool command_pool = device.createCommandPool(queue: graphics_queue.index)!;
     CommandBufferList command_buffers = device.createCommandBuffers(command_pool, swapchain_info.minImageCount)!;
 
     // Create allocator of 50MB - DEVICE_ONLY memory
@@ -330,29 +336,28 @@ fn void! main(String[] args)
                 .setSize(UniformData.sizeof)
                 .bind(&local_allocation)!;
 
-    // Create stage buffers and then copy the data to GPU only buffers
-    MemoryBlock vertex_stage_buffer = device.staging_buffer(size: Vertex.sizeof * vertices.len, data: vertices, pdevice: physical_device)!;
-    MemoryBlock index_stage_buffer = device.staging_buffer(size: ushort.sizeof * indices.len, data: indices, pdevice: physical_device)!;    
 
-    device.@single_time_command(queue: queue_family.graphics_handle, queue_index: queue_family.graphics; CommandBuffer command_buffer) {
-         vk::cmdCopyBuffer(command_buffer, index_stage_buffer.buffer, index_buffer.buffer, 1, &&BufferCopy {
+    // Create stage buffers and then copy the data to GPU only buffers
+    usz buffer_size = Vertex.sizeof * vertices.len + ushort.sizeof * indices.len;
+    vk::@upload_from_stage(size: buffer_size, queue: graphics_queue, allocator: local_allocation; MemoryBlock stage_buffer, CommandBuffer command_buffer) {
+        stage_buffer.push(indices, ushort.sizeof * indices.len);
+        stage_buffer.push(vertices, Vertex.sizeof * vertices.len);
+
+        vk::cmdCopyBuffer(command_buffer, stage_buffer.buffer, index_buffer.buffer, 1, &&BufferCopy {
              .srcOffset = 0,
              .dstOffset = 0,
              .size = ushort.sizeof * indices.len
          });
 
-         vk::cmdCopyBuffer(command_buffer, vertex_stage_buffer.buffer, vertex_buffer.buffer, 1, &&BufferCopy {
-            .srcOffset = 0,
+         vk::cmdCopyBuffer(command_buffer, stage_buffer.buffer, vertex_buffer.buffer, 1, &&BufferCopy {
+            .srcOffset = ushort.sizeof * indices.len,
             .dstOffset = 0,
             .size = Vertex.sizeof * vertices.len
          });
     }!;
 
-    index_stage_buffer.free(device);
-    vertex_stage_buffer.free(device);
-
     // Add data for uniform buffer
-    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
+    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
 
     // Set-up descriptor info for uniform buffer usage
     DescriptorSetLayout descriptor_set_layout = vk::descriptorSetLayoutCreateInfo()
@@ -378,11 +383,13 @@ fn void! main(String[] args)
            })
     };
 
-    // Load shaders
-    char[*] vertex_shader_data = $embed("./shaders/cube_vert.spv");
-    char[*] fragment_shader_data = $embed("./shaders/cube_frag.spv");
+    // Create shader module
+    ShaderModule shader_module = vk::shaderModuleCreateInfo()
+    .setCodeSize(shader.len)
+    .setCode((uint*)&shader[0])
+    .build(device)!;
 
-    Shader draw_shaders = device.createShader(vertex: &vertex_shader_data, fragment: &fragment_shader_data)!;
+    defer shader_module.free(device);
 
     PipelineLayout pipeline_layout = vk::pipelineLayoutCreateInfo().setSetLayouts({ descriptor_set_layout }).build(device)!;
 
@@ -413,7 +420,16 @@ fn void! main(String[] args)
 
     // Create Renderpipeline info
     Pipeline pipeline = vk::graphicsPipelineCreateInfo()
-    .setStages(&draw_shaders.stages)
+    .setStages({
+        vk::pipelineShaderStageCreateInfo()
+        .setStage(vk::SHADER_STAGE_VERTEX_BIT)
+        .setMod(shader_module)
+        .setName("main"),
+         vk::pipelineShaderStageCreateInfo()
+        .setStage(vk::SHADER_STAGE_FRAGMENT_BIT)
+        .setMod(shader_module)
+        .setName("main")
+    })
     .setLayout(pipeline_layout)
      .setVertexInputState(&&vk::pipelineVertexInputStateCreateInfo()
         .setVertexBindingDescriptions(
@@ -493,20 +509,17 @@ fn void! main(String[] args)
     .setRenderPass(render_pass)
     .build(device)!;
 
-
-    FrameBufferList frame_buffers = device.createFrameBuffers(
-        &&FramebufferCreateInfo {
-            .sType = vk::STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = render_pass,
-            .attachmentCount = 1,
-            .width = extent.width,
-            .height = extent.height,
-            .layers = 1,
-        },
-        swapchain_views
-    )!;
-
-    defer frame_buffers.free();
+    FrameBufferList frame_buffers;
+    
+    foreach (swapchain: swapchain_views) {
+       FramebufferCreateInfo frame_buffer_info = vk::framebufferCreateInfo()
+        .setRenderPass(render_pass)
+        .setWidth((uint)WIDTH)
+        .setHeight((uint)HEIGHT)
+        .setLayers(1)
+        .setAttachments({ swapchain });
+        frame_buffers.push(frame_buffer_info.build(device)!);
+    }
 
     // Create syncronisation stuff
     SemaphoreList wait_semaphores;
@@ -523,22 +536,23 @@ fn void! main(String[] args)
     uint frame = 0;
 
     MouseParams last_params;
+
     while (running) {
         c3w::Event event = win.getEvent();
-        if (event.mouse_click == LEFT_MOUSE) {
-           MouseParams params = c3w::getMousePos(win);
-           camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
-           uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size, device);
-           last_params = params;
-        }
-        
-        // switch (event.type) {
-        //     case c3w::MOUSE_RELEASED: {}
-        //     case c3w::KEY_PRESSED: {
-        //         if (event.value == c3w::ESCAPE) running = false;
-        //     }
+        // if (win.left_click) {
+        //    MouseParams params = c3w::getMousePos(win);
+        //    camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
+        //    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+        //    last_params = params;
         // }
-
+        
+        switch (event.type) {
+            case MOUSE_RELEASED: {}
+            case KEY_PRESSED: {
+                if (event.value == ESCAPE) running = false;
+            }
+            default: {}
+        }
         Fence frame_fence = frame_fences[frame];
         Semaphore wait_semaphore = wait_semaphores[frame];
         Semaphore signal_semaphore = signal_semaphores[frame];
@@ -584,14 +598,14 @@ fn void! main(String[] args)
         .setWaitDstStageMask({vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
 
         vk::endCommandBuffer(command_buffer)!;
-        vk::queueSubmit(queue_family.graphics_handle, 1, &submit_info, frame_fence)!;
+        vk::queueSubmit(graphics_queue.handle, 1, &submit_info, frame_fence)!;
 
-        PresentInfoKHR present_info = vk::presentInfo()
+        PresentInfoKHR present_info = vk::presentInfoKHR()
         .setWaitSemaphores({ signal_semaphore })
         .setSwapchains({ swapchain })
         .setImageIndices({ next_image });
 
-        vk::queuePresentKHR(queue_family.graphics_handle, &present_info)!;
+        vk::queuePresentKHR(graphics_queue.handle, &present_info)!;
         frame = (frame + 1) % 2;
     }
 
@@ -599,8 +613,11 @@ fn void! main(String[] args)
     if (ENABLE_VALIDATION_LAYERS) debug_messenger.free(instance);
 
     swapchain.free(device);
+
     foreach (view : swapchain_views) view.free(device);
     foreach (buffer : frame_buffers) buffer.free(device);
+
+    render_pass.free(device);
     swapchain_images.free();
     swapchain_views.free();
     command_pool.free(device);
@@ -609,7 +626,6 @@ fn void! main(String[] args)
     local_allocation.free();
     
     descriptor_set_layout.free(device);
-    draw_shaders.free(device);
     pipeline.free(device);
     pipeline_layout.free(device);
 
@@ -617,7 +633,4 @@ fn void! main(String[] args)
     signal_semaphores.release(device);
     frame_fences.release(device);
     surface.free(instance);
-
-    device.free();
-    instance.free();
 }
