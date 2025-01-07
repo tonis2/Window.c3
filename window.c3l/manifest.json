@@ -2,7 +2,9 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
-      "linked-libraries" : ["Cocoa.framework"]
+      "linked-libraries" : ["CoreFoundation.framework", "Cocoa.framework"],
+      "c-sources" : ["./cocoa.o"],
+      "cflags": "-c -framework Foundation -framework Cocoa -fPIC ./cocoa.o"
     },
     "linux-x64" : {
       "linked-libraries" : ["X11", "xcb"]

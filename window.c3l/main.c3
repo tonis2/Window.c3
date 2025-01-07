@@ -47,12 +47,10 @@ struct Event
 }
 
 struct Params {
-    int depth;
     int x;
     int y;
     int width;
     int height;
-    int border_width;
 }
 
 fault WindowError {
