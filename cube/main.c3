@@ -185,7 +185,7 @@ fn void! main(String[] args)
         PhysicalDeviceProperties properties;
         vk::getPhysicalDeviceProperties(entry, &properties);
         assert(surface.checkSurfaceSupport((usz)queue_index, entry)!!);
-        
+ 
         if (queue_index >= 0 && supports_extensions && properties.vendorID != 0) {
             io::printfn("Device selected %s", (ZString)properties.deviceName[0..]);
             physical_device = entry;
@@ -536,17 +536,20 @@ fn void! main(String[] args)
     uint frame = 0;
 
     MouseParams last_params;
+    Vec2f prev_mouse;
 
     while (running) {
         c3w::Event event = win.getEvent();
-        // if (win.left_click) {
-        //    MouseParams params = c3w::getMousePos(win);
-        //    camera.rotate((float)params.x - last_params.x, -((float)params.y - last_params.y));
-        //    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        //    last_params = params;
-        // }
-        
         switch (event.type) {
+            case MOUSE_PRESSED: {}
+            case MOUSE_MOTION: {
+                if (win.is_pressed(LEFT_MOUSE)) {
+                    Vec2f mouse_pos = win.getMousePos();
+                    camera.rotate(-(event.mouse_x - mouse_pos.x) * (float)0.1, (event.mouse_y - mouse_pos.y) * (float)0.1);
+                    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+                    prev_mouse = mouse_pos;
+                }
+            }
             case MOUSE_RELEASED: {}
             case KEY_PRESSED: {
                 if (event.value == ESCAPE) running = false;

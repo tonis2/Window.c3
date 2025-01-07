@@ -27,14 +27,23 @@ struct Window {
     Win32Window src @if(env::WIN32);
     uint width;
     uint height;
+    EventMap[EventKey.len] event_map;
 }
+
+fn bool Window.is_pressed(self, EventKey key) {
+    foreach (item: self.event_map) {
+        if (item.key == key) return item.selected;
+    };
+    return false;
+}
+
 
 struct Event
 {
    EventType type;
    EventKey value;
-   short mouse_x;
-   short mouse_y;
+   float mouse_x;
+   float mouse_y;
 }
 
 struct Params {
@@ -50,14 +59,6 @@ fault WindowError {
     FAILED_OPENING_WINDOW
 }
 
-struct MouseParams {
-    char type;
-    ushort x;
-    ushort y;
-    ushort root_x;
-    ushort root_y;
-}
-
 enum EventType : uint (uint value)
 {
     EMPTY_EVENT = 0,
@@ -71,6 +72,11 @@ enum EventType : uint (uint value)
     QUIT = 32,
     DND = 33,
     DND_INIT = 34,
+}
+
+struct EventMap {
+    EventKey key;
+    bool selected;
 }
 
 enum EventKey : uint (uint value)
