@@ -8,7 +8,6 @@ def XCB_setup = void*;
 
 extern fn vk::Display openDisplay(char* name) @extern("XOpenDisplay");
 extern fn vk::Connection xcbConnect(char* name, uint* window) @extern("xcb_connect");
-extern fn vk::Connection xcbCreateWindow(char* name, uint* window) @extern("xcb_create_window");
 extern fn XCB_setup xcbGetSetup(vk::Connection connection) @extern("xcb_get_setup");
 extern fn XScreenIterator* xcbRootsIterator(XCB_setup setup) @extern("xcb_setup_roots_iterator");
 extern fn vk::Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
