@@ -15,6 +15,8 @@ extern fn vk::Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
 extern fn vk::Window xcbMapWindow(vk::Connection con, vk::Window win) @extern("xcb_map_window");
 extern fn vk::Window xcbFlush(vk::Connection con) @extern("xcb_flush");
 extern fn KeyPressEvent* xcbPollEvent(vk::Connection con) @extern("xcb_poll_for_event");
+extern fn KeyPressEvent* xcbPollQueuedEvent(vk::Connection con) @extern("xcb_poll_for_queued_event");
+extern fn KeyPressEvent* xcbWaitForEvent(vk::Connection con) @extern("xcb_wait_for_event");
 extern fn void xcbChangeProperty(vk::Connection con, XcbProp mode, vk::Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
 extern fn uint xcbQueryPointer(vk::Connection con, vk::Window window) @extern("xcb_query_pointer");
 extern fn KeyPressEvent* xcbQueryPointerReply(vk::Connection con, uint cookie, void* err) @extern("xcb_query_pointer_reply");
@@ -47,6 +49,7 @@ enum XcbProp : uint (uint value)
 enum XcbEventMask : uint (uint value)
 {
     CW_EVENT_MASK = 2048,
+    BACK_PIXEL = 2,
     CW_CURSOR = 16384,
     EVENT_MASK_NO_EVENT = 0,
     EVENT_MASK_EXPOSURE = 32768,
@@ -108,6 +111,13 @@ struct KeyPressEvent {
     char same_screen;
 }
 
+struct MouseParams {
+    char type;
+    ushort x;
+    ushort y;
+    ushort root_x;
+    ushort root_y;
+}
 
 // Creates new XCB window
 fn Window! new(Params params, String name) {
@@ -125,8 +135,9 @@ fn Window! new(Params params, String name) {
 
     vk::Window window = xcbWindowId(connection);
 
-    uint mask = XcbEventMask.CW_EVENT_MASK.value ;
-    uint[] event_masks = {XcbEventMask.EVENT_MASK_EXPOSURE.value | XcbEventMask.EVENT_MASK_KEY_PRESS.value | XcbEventMask.EVENT_MASK_KEY_RELEASE.value |
+    uint mask = XcbEventMask.BACK_PIXEL.value | XcbEventMask.CW_EVENT_MASK.value;
+    uint[] event_masks = {screen_iterator.data.black_pixel,
+                          XcbEventMask.EVENT_MASK_EXPOSURE.value | XcbEventMask.EVENT_MASK_KEY_PRESS.value | XcbEventMask.EVENT_MASK_KEY_RELEASE.value |
                           XcbEventMask.EVENT_MASK_BUTTON_PRESS.value | XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value | XcbEventMask.EVENT_MASK_POINTER_MOTION.value };
 
     uint cookie = createWindow(
@@ -151,43 +162,83 @@ fn Window! new(Params params, String name) {
     // Change window name
     // XCB_ATOM_WM_NAME, XCB_ATOM_STRING
     xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, 39, 31, 8, name.len, name);
-
-    return Window {
+    Window response = Window {
        .src = LinuxWindow {
             .window = window,
             .connection = connection,
             .display = dpy,
        },
-       .width = 200,
-       .height = 200
+       .width = screen_iterator.data.width_in_pixels,
+       .height = screen_iterator.data.height_in_pixels
     };
+
+    foreach (index, item: EventKey.values) {
+        response.event_map[index] = {
+           .key = item,
+           .selected = false
+        };
+    }
+
+    return response;
+}
+
+fn Vec2f Window.getMousePos(self) {
+    void* err;  
+    KeyPressEvent* mouse_pos = xcbQueryPointerReply(self.src.connection, xcbQueryPointer(self.src.connection, self.src.window), &err);
+    Vec2f response = {mouse_pos.root_x, mouse_pos.root_y};
+    free(mouse_pos);
+    free(err);
+
+    return response;
 }
 
 fn Event Window.getEvent(&self) {
-   KeyPressEvent* event = xcbPollEvent(self.src.connection);
+   KeyPressEvent* event = xcbWaitForEvent(self.src.connection);
    Event event_response;
-
    defer free(event);
-
+      
    if (event != null) {
         EventType type = @enum_from_value(EventType, value, event.type)!!;
+        EventKey value = @enum_from_value(EventKey, value, event.value)!!;
+    
+        event_response = Event {
+            .type = type,
+            .value = value,
+            .mouse_x = event.event_x,
+            .mouse_y = event.event_y,
+        };
+
         switch (type) {
-            case KEY_PRESSED:
-            case KEY_RELEASED:
-            case MOUSE_MOTION:
-            case MOUSE_RELEASED:
-            case MOUSE_PRESSED: {  
-                event_response = Event{
-                    .type = type, 
-                    .value = @enum_from_value(EventKey, value, event.value)!!,
-                    .mouse_x = event.event_x,
-                    .mouse_y = event.event_y,
+            case KEY_PRESSED: {
+            }
+            case KEY_RELEASED: {
+    
+            }
+            case MOUSE_MOTION: {
+           
+            }
+            case MOUSE_RELEASED: {
+                foreach (&item: self.event_map) {
+                    if (item.key == value) {
+                        item.selected = false;
+                        break;
+                    };
+                };
+            }
+            case MOUSE_PRESSED: {
+                foreach (&item: self.event_map) {
+                    if (item.key == value) {
+                        item.selected = true;
+                        break;
+                    };
                 };
                 break;
             }
             default: {};
         }
+
     }
+
     return event_response;
 }
 

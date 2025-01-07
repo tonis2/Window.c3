@@ -18,7 +18,6 @@ build/*
 
 # Libraries
 *.lib
-*.a
 *.la
 *.lo
 

@@ -6,7 +6,7 @@
       "linked-libraries" : []
     },
     "linux-x64" : {
-      "linked-libraries" : ["vulkan"]
+      "linked-libraries" : ["./vulkan.c3l/libvulkan.a"]
     },
     "windows-x64" : {
       "linked-libraries" : []
