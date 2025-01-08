@@ -31,12 +31,10 @@ typedef struct Window_Result {
 } Window_Result;
 
 typedef struct Window_Params {
-    int depth;
     int x;
     int y;
     int width;
     int height;
-    int border_width;
 } Window_Params;
 
 typedef struct MouseParams {
@@ -128,7 +126,7 @@ Window_Result createWindow(Window_Params params)
 
   uint32_t windowStyle = WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED;
 
-  window = CreateWindow(
+   window = CreateWindow(
         szWindowClass,
         wc.lpszClassName,
         WS_OVERLAPPEDWINDOW,

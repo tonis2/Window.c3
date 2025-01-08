@@ -10,8 +10,8 @@ struct DarwinWindow {
 }
 
 struct Win32Window {
-    vk::Hwnd window;
-    vk::Hinstance instance;
+    Win32_HWND window;
+    Win32_HINSTANCE instance;
     Win32_HDC hdc;
 }
 

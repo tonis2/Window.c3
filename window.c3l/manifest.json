@@ -10,7 +10,6 @@
       "linked-libraries" : ["X11", "xcb"]
     },
     "windows-x64" : {
-      "c-sources" : ["win32.c"],
       "linked-libraries" : []
     }
   }

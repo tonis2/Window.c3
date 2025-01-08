@@ -1,14 +1,14 @@
 module vk;
+import std::os::win32;
 
 macro uint @makeApiVersion(uint $variant, uint $major, uint $minor, uint $patch) => (($variant << 29) | ($major << 22) | ($minor << 12) | $patch);
 
 distinct Display = inline void*;
 distinct Connection = inline void*;
 distinct Window = inline ulong;
-distinct Hinstance = inline ulong;
-distinct Hwnd = inline void*;
+distinct Hinstance = Win32_HINSTANCE; 
+def Hwnd = Win32_HWND;
 distinct VisualID = inline ulong;
-
 
 def PFN_vkAllocationFunction = fn void* (void*, usz, usz, SystemAllocationScope);
 def PFN_vkFreeFunction = fn void (void*, void*);
