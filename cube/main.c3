@@ -540,16 +540,15 @@ fn void! main(String[] args)
 
     while (running) {
         c3w::Event event = win.getEvent();
+        if (win.is_pressed(LEFT_MOUSE)) {
+            Vec2f mouse_pos = win.getMousePos();
+            camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
+            uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+            prev_mouse = mouse_pos;
+        }
+
         switch (event.type) {
             case MOUSE_PRESSED: {}
-            case MOUSE_MOTION: {
-                if (win.is_pressed(LEFT_MOUSE)) {
-                    Vec2f mouse_pos = win.getMousePos();
-                    camera.rotate(-(event.mouse_x - mouse_pos.x) * (float)0.1, (event.mouse_y - mouse_pos.y) * (float)0.1);
-                    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-                    prev_mouse = mouse_pos;
-                }
-            }
             case MOUSE_RELEASED: {}
             case KEY_PRESSED: {
                 if (event.value == ESCAPE) running = false;
