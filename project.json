@@ -22,7 +22,7 @@
 		},
 		"zip": {
 			"type": "prepare",
-			"exec": ["zip ./window.c3l ./dependencies/window.c3l/*.c3 ./dependencies/window.c3l/manifest.json"]
+			"exec": ["cd ./dependencies/window.c3l && zip ../../window.c3l ./*.c3 ./manifest.json"]
 		}
 	},
 	"output": "./build"
