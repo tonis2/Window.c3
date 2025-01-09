@@ -3,8 +3,11 @@
 	"warnings": ["no-unused"],
 	"authors": [],
 	"version": "0.1.0",
-	"dependency-search-paths": ["./"],
+	"dependency-search-paths": ["./dependencies"],
 	"dependencies": ["vk", "c3w"],
+	"script-dir": "./",
+	"sources": [],
+	"linked-libraries": ["./dependencies/libvulkan.a"],
 	"features": [],
 	"targets": {
 		"cube": {
@@ -16,6 +19,10 @@
 			"type": "executable",
 			"sources-add": ["./test/main.c3"],
 			"dependencies": []
+		},
+		"zip": {
+			"type": "prepare",
+			"exec": ["zip ./window.c3l ./dependencies/window.c3l/*.c3 ./dependencies/window.c3l/manifest.json"]
 		}
 	},
 	"output": "./build"

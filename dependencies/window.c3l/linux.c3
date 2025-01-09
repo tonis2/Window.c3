@@ -137,7 +137,7 @@ fn Window! new(Params params, String name) {
     uint mask = XcbEventMask.BACK_PIXEL.value | XcbEventMask.CW_EVENT_MASK.value;
     uint[] event_masks = {screen_iterator.data.black_pixel,
                           XcbEventMask.EVENT_MASK_EXPOSURE.value | XcbEventMask.EVENT_MASK_KEY_PRESS.value | XcbEventMask.EVENT_MASK_KEY_RELEASE.value |
-                          XcbEventMask.EVENT_MASK_BUTTON_PRESS.value | XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value | XcbEventMask.EVENT_MASK_POINTER_MOTION.value };
+                          XcbEventMask.EVENT_MASK_BUTTON_PRESS.value | XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value};
 
     uint cookie = createWindow(
                         connection,
@@ -148,7 +148,7 @@ fn Window! new(Params params, String name) {
                         (short)params.y,
                         (short)params.width,
                         (short)params.height,
-                        (short)params.border_width,
+                        (short)1.0,
                         1,
                         screen_iterator.data.root_visual,
                         mask,
@@ -192,7 +192,7 @@ fn Vec2f Window.getMousePos(self) {
 }
 
 fn Event Window.getEvent(&self) {
-   KeyPressEvent* event = xcbWaitForEvent(self.src.connection);
+   KeyPressEvent* event = xcbPollEvent(self.src.connection);
    Event event_response;
    defer free(event);
       
