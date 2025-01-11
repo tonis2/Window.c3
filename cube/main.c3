@@ -547,14 +547,10 @@ fn void! main(String[] args)
             prev_mouse = mouse_pos;
         }
 
-        switch (event.type) {
-            case MOUSE_PRESSED: {}
-            case MOUSE_RELEASED: {}
-            case KEY_PRESSED: {
-                if (event.value == ESCAPE) running = false;
-            }
-            default: {}
+        if (win.is_pressed(ESCAPE)) {
+            running = false;
         }
+
         Fence frame_fence = frame_fences[frame];
         Semaphore wait_semaphore = wait_semaphores[frame];
         Semaphore signal_semaphore = signal_semaphores[frame];
