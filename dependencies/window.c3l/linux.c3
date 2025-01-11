@@ -208,14 +208,7 @@ fn Event Window.getEvent(&self) {
         };
 
         switch (type) {
-            case KEY_PRESSED: {
-            }
-            case KEY_RELEASED: {
-    
-            }
-            case MOUSE_MOTION: {
-           
-            }
+            case KEY_RELEASED:
             case MOUSE_RELEASED: {
                 foreach (&item: self.event_map) {
                     if (item.key == value) {
@@ -224,6 +217,7 @@ fn Event Window.getEvent(&self) {
                     };
                 };
             }
+            case KEY_PRESSED:
             case MOUSE_PRESSED: {
                 foreach (&item: self.event_map) {
                     if (item.key == value) {
