@@ -2,7 +2,7 @@ import c3w;
 import std;
 
 
-fn void! main(String[] args)
+fn void main(String[] args)
 {
     c3w::new(
         params: {
@@ -11,7 +11,8 @@ fn void! main(String[] args)
             .x = 0,
             .y = 0
         },
-    );
+        name: "Window"
+    )!!;
 
     
     // bool running = true;

@@ -7,7 +7,7 @@
 	"dependencies": ["vk", "c3w"],
 	"script-dir": "./",
 	"sources": [],
-	"linked-libraries": ["./dependencies/libvulkan.a"],
+	"linked-libraries": [],
 	"features": [],
 	"targets": {
 		"cube": {
@@ -15,7 +15,7 @@
 			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
 			"dependencies": []
 		},
-		"test": {
+		"objc": {
 			"type": "executable",
 			"sources-add": ["./test/main.c3"],
 			"dependencies": []
