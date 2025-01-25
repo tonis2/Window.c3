@@ -6,7 +6,8 @@ import std;
 import std::os::win32;
 
 struct DarwinWindow {
-    uint i;
+    NSWindow window;
+    NSApplication app;
 }
 
 struct Win32Window {
