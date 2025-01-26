@@ -4,7 +4,7 @@ import std;
 
 fn void main(String[] args)
 {
-    c3w::new(
+    c3w::Window win = c3w::new(
         params: {
             .width = 900,
             .height = 600,
@@ -14,18 +14,19 @@ fn void main(String[] args)
         name: "Window"
     )!!;
 
+    defer win.free();
     
-    // bool running = true;
-    // while (running) {
-    //     c3w::Event event = win.getEvent();
-    //     switch (event.type) {
-    //         case MOUSE_RELEASED: {}
-    //         case KEY_PRESSED: {
-    //             if (event.value == ESCAPE) running = false;
-    //         }
-    //         default: {
+    bool running = true;
+    while (running) {
+        c3w::Event event = win.getEvent();
+        // switch (event.type) {
+        //     case MOUSE_RELEASED: {}
+        //     case KEY_PRESSED: {
+        //         if (event.value == ESCAPE) running = false;
+        //     }
+        //     default: {
                 
-    //         }
-    //     }
-    // }
+        //     }
+        // }
+    }
 }

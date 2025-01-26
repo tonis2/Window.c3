@@ -87,9 +87,6 @@ fn void! main(String[] args)
         name: "Cube"
     )!!;
     defer win.free();
-
-    // io::printfn("connection %p window %d", win.src.connection, win.src.window);
-    io::printfn("(Screen) width %d height %d", win.width, win.height);
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
 
@@ -535,9 +532,7 @@ fn void! main(String[] args)
     bool running = true;
     uint frame = 0;
 
-    MouseParams last_params;
     Vec2f prev_mouse;
-
     while (running) {
         c3w::Event event = win.getEvent();
         if (win.is_pressed(LEFT_MOUSE)) {
