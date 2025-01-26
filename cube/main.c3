@@ -532,9 +532,7 @@ fn void! main(String[] args)
     bool running = true;
     uint frame = 0;
 
-    MouseParams last_params;
     Vec2f prev_mouse;
-
     while (running) {
         c3w::Event event = win.getEvent();
         if (win.is_pressed(LEFT_MOUSE)) {
