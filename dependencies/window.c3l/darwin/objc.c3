@@ -16,6 +16,7 @@ def SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
 def SendSize = fn void*(void*, ObjcSelector, NSSize);
 def SendString = fn void*(void*, ObjcSelector, ZString);
 def GetInt = fn int(void*, ObjcSelector);
+def GetCharacters = fn ZString(void*, ObjcSelector);
 def GetPoint = fn NSPoint(void*, ObjcSelector);
 
 fault ObjcFault {
@@ -108,6 +109,7 @@ fn void NSApplication.updateWindows(&self)
 
 fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
 fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
+fn int NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 
 <* @require self.id `NSApplication is not initialized` *>
