@@ -78,6 +78,13 @@ fn void NSApplication.setDelegate(&self, NSObject delegate)
 }
 
 <* @require self.id `NSApplication is not initialized` *>
+fn void NSWindow.setTitle(&self, NSString title)
+{
+    objc::msg_send(self.id, SendId, "setTitle:", title.id);
+}
+
+
+<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.terminate(&self)
 {
     objc::msg_send(self.id, SendId, "terminate:", self.id);
