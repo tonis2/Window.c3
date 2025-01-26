@@ -87,9 +87,6 @@ fn void! main(String[] args)
         name: "Cube"
     )!!;
     defer win.free();
-
-    // io::printfn("connection %p window %d", win.src.connection, win.src.window);
-    io::printfn("(Screen) width %d height %d", win.width, win.height);
     
     Camera camera = camera::new(eye: {0.0, 5.0, 10}, aspect: WIDTH / HEIGHT, min_zoom: 0.01, max_zoom: 1000);
 

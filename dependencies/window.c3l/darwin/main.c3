@@ -35,15 +35,10 @@ fn Window! new(Params params, String name) {
     win.alloc();
     ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val | WindowStyleMask.TITLED.val | WindowStyleMask.RESIZABLE.val;
     win.initWithContentRect(NSRect {{params.x, params.y}, {params.width, params.height}}, window_style, window_style, false);
-
-    // void* titleStr = objc::createNSString("C3 Window");
-    // if (titleStr == null) {
-    //     io::printn("Failed to create window title!");
-    //     return;
-    // }
-    
-    // Set window title
-    // objc_runtime::objc_SendMsg1(window, "setTitle:", titleStr);
+   
+    NSObject window_title = NSObject.new("NSString");
+    window_title.stringWithUTF8String((ZString)name);
+    win.setTitle(window_title);
 
     NSObject delegate = NSObject.new("NSObject");
     delegate.alloc_class_pair("WindowDelegate", 0);
