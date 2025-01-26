@@ -15,7 +15,7 @@
 			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
 			"dependencies": []
 		},
-		"objc": {
+		"test": {
 			"type": "executable",
 			"sources-add": ["./test/main.c3"],
 			"dependencies": []

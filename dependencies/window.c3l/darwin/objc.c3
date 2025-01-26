@@ -48,12 +48,6 @@ fn NSObject NSObject.new(ZString cls_name = "NSObject") @operator(construct)
     self.cls = objc::getClass(cls_name);
     return self;
 }
-// macro NSObject NSObject.new() @operator(construct)
-// {
-//     NSObject self;
-//     self.cls = objc::getClass("NSApplication");
-//     return self;
-// }
 
 <* @require self.id `self is not initialized` *>
 macro NSObject.call(&self, $FunctionType, ZString $selector, ...)

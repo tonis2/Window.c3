@@ -4,6 +4,11 @@ import std::os::win32;
 import vk;
 import std::io;
 
+struct Win32Window {
+    vk::Hwnd window;
+    vk::Hinstance instance;
+    Win32_HDC hdc;
+}
 
 extern fn Window createWindow(Params params) @extern("createWindow");
 extern fn Event getEvent(Window window) @extern("getEvent");
