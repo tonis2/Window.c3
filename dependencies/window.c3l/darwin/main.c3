@@ -4,6 +4,11 @@ import std::io;
 import std::core::types;
 import std::os::macos::objc;
 
+struct DarwinWindow {
+    NSWindow window;
+    NSApplication app;
+}
+
 fn bool on_close(ObjcId self)
 {
     io::printn("closing window..");

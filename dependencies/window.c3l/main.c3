@@ -5,16 +5,7 @@ import vk;
 import std;
 import std::os::win32;
 
-struct DarwinWindow {
-    NSWindow window;
-    NSApplication app;
-}
 
-struct Win32Window {
-    vk::Hwnd window;
-    vk::Hinstance instance;
-    Win32_HDC hdc;
-}
 
 struct LinuxWindow {
     vk::Display display;
