@@ -5,12 +5,6 @@ import vk;
 import std;
 import std::os::win32;
 
-struct LinuxWindow {
-    vk::Display display;
-    vk::Connection connection;
-    vk::Window window;
-}
-
 struct Window {
     DarwinWindow src @if(env::os_is_darwin());
 	LinuxWindow src @if(env::LINUX);

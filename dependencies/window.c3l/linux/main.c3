@@ -4,6 +4,12 @@ import vk;
 import std::io;
 import std::core::types;
 
+struct LinuxWindow {
+    vk::Display display;
+    vk::Connection connection;
+    vk::Window window;
+}
+
 def XCB_setup = void*;
 
 extern fn vk::Display openDisplay(char* name) @extern("XOpenDisplay");

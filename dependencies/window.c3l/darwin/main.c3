@@ -7,6 +7,7 @@ import std::os::macos::objc;
 struct DarwinWindow {
     NSWindow window;
     NSApplication app;
+    CALayer layer;
 }
 
 fn bool on_close(ObjcId self)
@@ -40,10 +41,6 @@ fn Window! new(Params params, String name) {
     window_title.stringWithUTF8String((ZString)name);
     win.setTitle(window_title);
 
-    int view = win.contentView();
-    io::printfn("%d", view);
-    //win.wantsLayer(true);
-
     NSObject delegate = NSObject.new("NSObject");
     delegate.alloc_class_pair("WindowDelegate", 0);
     delegate.add_ivar("NSWindow", $sizeof(win), math::log2($sizeof(win)), "L")!!;
@@ -59,10 +56,14 @@ fn Window! new(Params params, String name) {
     app.activateIgnoringOtherApps(true);
     app.finishLaunching();
 
+    NSView view = win.contentView();
+    CALayer layer = view.get_layer();
+
     Window response = Window {
         .src = {
             .window = win,
             .app = app,
+            .layer = layer
         }
     };
 
@@ -98,7 +99,7 @@ fn Event Window.getEvent(&self) {
         NSPoint pos = event.locationInWindow();
         // EventKey value = ;
         event_response = Event {
-            .type = @enum_from_value(EventType, value, type) ?? (EventType)0,
+            .type = @enum_from_value(EventType, value, type)!!,
             // .value = value,
             .mouse_x = (float)pos.x,
             .mouse_y = (float)pos.y,
@@ -108,7 +109,7 @@ fn Event Window.getEvent(&self) {
             case LEFT_MOUSE_UP: 
             case RIGHT_MOUSE_UP:
             {
-
+                break;
             }
             case LEFT_MOUSE_DOWN:
             case RIGHT_MOUSE_DOWN: {
@@ -151,7 +152,6 @@ fn void Window.free(&self) {
 enum EventType : uint (uint value)
 {
     EMPTY_KEY = 0,
-
     LEFT_MOUSE_DOWN     = 1,
 	LEFT_MOUSE_UP       = 2,
 	RIGHT_MOUSE_DOWN    = 3,

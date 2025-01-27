@@ -3,6 +3,7 @@ import std::os::macos::objc;
 import std::io;
 import std::math;
 
+
 def SendBool = fn void*(void*, ObjcSelector, bool);
 def SendContentRec = fn void*(void*, ObjcSelector, NSRect, long, long, bool);
 def SendDequeueEvent = fn void*(void*, ObjcSelector, long, void*, ObjcId, bool);
@@ -16,8 +17,12 @@ def SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
 def SendSize = fn void*(void*, ObjcSelector, NSSize);
 def SendString = fn void*(void*, ObjcSelector, ZString);
 def GetInt = fn int(void*, ObjcSelector);
+// def GetView = fn NSView(void*, ObjcSelector);
+def GetRect = fn NSRect(void*, ObjcSelector);
 def GetCharacters = fn NSString(void*, ObjcSelector);
 def GetPoint = fn NSPoint(void*, ObjcSelector);
+def GetID = fn ObjcId*(void*, ObjcSelector);
+def GetPtr = fn void*(void*, ObjcSelector);
 
 fault ObjcFault {
     IVAR_NOT_SET,
@@ -27,8 +32,9 @@ fault ObjcFault {
 
 struct NSObject {
     ObjcClass cls;
-    ObjcId *id;
+    ObjcId* id;
 }
+
 
 def NSApplication = NSObject;
 def NSStatusBar = NSObject;
@@ -40,6 +46,9 @@ def NSWindow = NSObject;
 def NSAutoreleasePool = NSObject;
 def NSValue = NSObject;
 def NSDate = NSObject;
+
+distinct NSView = void*;
+distinct CALayer = void*;
 distinct NSEvent = void*;
 distinct NSStatusBarItem = void*;
 
@@ -83,7 +92,6 @@ fn void NSWindow.setTitle(&self, NSString title)
     objc::msg_send(self.id, SendId, "setTitle:", title.id);
 }
 
-
 <* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.terminate(&self)
 {
@@ -113,12 +121,6 @@ fn void NSApplication.updateWindows(&self)
 {
     objc::msg_send(self.id, SendVoid, "updateWindows");
 }
-
-fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
-fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
-fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
-fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
-fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 
 <* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.sendEvent(&self, NSEvent event)
@@ -192,7 +194,7 @@ fn void NSWindow.setIsVisible(&self, bool flag)
 }
 
 <* @require self.id `NSWindow is not initialized` *>
-fn int NSWindow.contentView(&self) => objc::msg_send(self.id, GetInt, "contentView");
+fn NSView NSWindow.contentView(&self) => (NSView)objc::msg_send(self, GetPtr, "contentView");
 
 fn void NSObject.alloc(&self)
 {
@@ -236,6 +238,14 @@ macro void NSObject.setInstanceVariable(NSObject self, ZString name, NSObject ou
 {
     objc::setInstanceVariable(self.id, name, out.id);
 }
+
+fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
+fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
+fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
+fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
+fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
+fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
+fn CALayer NSView.get_layer(self) => (CALayer)objc::msg_send(self, GetPtr, "layer");
 
 struct NSPoint {
     double x;
