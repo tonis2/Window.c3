@@ -87,9 +87,10 @@ fn Event Window.getEvent(&self) {
     // until.distantFuture();
     NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
     int type = event.get_type();
-    NSPoint pos = event.locationInWindow();
 
     if (type != 0) {
+        
+        NSPoint pos = event.locationInWindow();
         // EventKey value = @enum_from_value(EventKey, value, event.value)!!;
         event_response = Event {
             .type = @enum_from_value(EventType, value, type)!!,
@@ -99,7 +100,6 @@ fn Event Window.getEvent(&self) {
         };
 
         switch (event_response.type) {
-            case KEY_RELEASED:
             case LEFT_MOUSE_UP: 
             case RIGHT_MOUSE_UP:
             {
@@ -111,8 +111,7 @@ fn Event Window.getEvent(&self) {
                 // };
             }
             case LEFT_MOUSE_DOWN:
-            case RIGHT_MOUSE_DOWN:
-            case KEY_PRESSED: {
+            case RIGHT_MOUSE_DOWN: {
                 // foreach (&item: self.event_map) {
                 //     if (item.key == value) {
                 //         item.selected = true;
@@ -120,6 +119,11 @@ fn Event Window.getEvent(&self) {
                 //     };
                 // };
                 break;
+            }
+            case KEY_PRESSED:
+            case KEY_RELEASED: {
+                int key = event.get_key();
+                io::printfn("%d", key);
             }
             default: {};
         }
@@ -176,38 +180,51 @@ enum EventType : uint (uint value)
 
 enum EventKey : uint (uint value)
 {
-    LEFT_MOUSE_DOWN     = 1,
-	LEFT_MOUSE_UP       = 2,
-	RIGHT_MOUSE_DOWN    = 3,
-	RIGHT_MOUSE_UP      = 4,
-	MOUSE_MOVED         = 5,
-	LEFT_MOUSE_DRAGGED  = 6,
-	RIGHT_MOUSE_DRAGGED = 7,
-	MOUSE_ENTERED       = 8,
-	MOUSE_EXITED        = 9,
-	KEY_DOWN            = 10,
-	KEY_UP              = 11,
-	FLAGS_CHANGED       = 12,
-	APPKIT_DEFINED      = 13,
-	SYSTEM_DEFINED      = 14,
-	APPLICATION_DEFINED = 15,
-	PERIODIC            = 16,
-	CURSOR_UPDATE       = 17,
-	SCROLL_WHEEL        = 22,
-	TABLET_POINT        = 23,
-	TABLET_PROXIMITY    = 24,
-	OTHER_MOUSE_DOWN    = 25,
-	OTHER_MOUSE_UP      = 26,
-	OTHER_MOUSE_DRAGGED = 27,
-	GESTURE             = 29,
-	MAGNIFY             = 30,
-	SWIPE               = 31,
-	ROTATE              = 18,
-	BEGIN_GESTURE       = 19,
-	END_GESTURE         = 20,
-	SMART_MAGNIFY       = 32,
-	QUICK_LOOK          = 33,
-	PRESSURE            = 34,
-	DIRECT_TOUCH        = 37,
-	CHANGE_MODE         = 38,
+    EMPTY_KEY = 0,
+    ESCAPE = 9,
+    A = 1,
+    B = 56,
+    C = 54,
+    D = 40,
+    E = 26,
+    F = 41,
+    G = 42,
+    H = 43,
+    I = 31,
+    J = 44,
+    K = 45,
+    L = 46,
+    M = 58,
+    N = 57,
+    O = 32,
+    P = 33,
+    Q = 24,
+    R = 27,
+    S = 39,
+    T = 28,
+    U = 30,
+    V = 55,
+    W = 25,
+    X = 53,
+    Y = 29,
+    Z = 52,
+
+    RETURN = 36,
+    DELETE = 119,   
+    NUMLOCK = 77,  
+    SLASH = 106,
+    MULTIPLY = 63,    
+    SUBTRACT = 82,  
+    NUM_0 = 87,
+    NUM_1 = 88,    
+    NUM_2 = 89, 
+    NUM_3 = 83,  
+    NUM_4 = 84,   
+    NUM_5 = 85,    
+    NUM_6 = 79, 
+    NUM_7 = 80,  
+    NUM_8 = 81,   
+    NUM_9 = 90,    
+    PERIOD = 91,    
+    KP_RETURN = 104
 }
