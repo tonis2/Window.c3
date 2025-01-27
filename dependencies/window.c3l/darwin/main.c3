@@ -87,9 +87,10 @@ fn Event Window.getEvent(&self) {
     // until.distantFuture();
     NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
     int type = event.get_type();
-    NSPoint pos = event.locationInWindow();
 
     if (type != 0) {
+        
+        NSPoint pos = event.locationInWindow();
         // EventKey value = @enum_from_value(EventKey, value, event.value)!!;
         event_response = Event {
             .type = @enum_from_value(EventType, value, type) ?? (EventType)0,
@@ -99,7 +100,6 @@ fn Event Window.getEvent(&self) {
         };
 
         switch (event_response.type) {
-            case KEY_RELEASED:
             case LEFT_MOUSE_UP: 
             case RIGHT_MOUSE_UP:
             {
@@ -111,8 +111,7 @@ fn Event Window.getEvent(&self) {
                 // };
             }
             case LEFT_MOUSE_DOWN:
-            case RIGHT_MOUSE_DOWN:
-            case KEY_PRESSED: {
+            case RIGHT_MOUSE_DOWN: {
                 // foreach (&item: self.event_map) {
                 //     if (item.key == value) {
                 //         item.selected = true;
@@ -120,6 +119,11 @@ fn Event Window.getEvent(&self) {
                 //     };
                 // };
                 break;
+            }
+            case KEY_PRESSED:
+            case KEY_RELEASED: {
+                int key = event.get_key();
+                io::printfn("%d", key);
             }
             default: {};
         }
