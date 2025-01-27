@@ -267,6 +267,7 @@ enum EventKey : uint (uint value)
     
     EMPTY_KEY = 0,
     ESCAPE = 9,
+    
     A = 38,
     B = 56,
     C = 54,

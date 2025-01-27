@@ -191,6 +191,9 @@ fn void NSWindow.setIsVisible(&self, bool flag)
     objc::msg_send(self.id, SendBool, "setIsVisible:", flag);
 }
 
+<* @require self.id `NSWindow is not initialized` *>
+fn int NSWindow.contentView(&self) => objc::msg_send(self.id, GetInt, "contentView");
+
 fn void NSObject.alloc(&self)
 {
     self.id = objc::msg_send(self.cls, SendVoid, "alloc");
@@ -247,19 +250,4 @@ struct NSSize {
 struct NSRect {
     NSPoint origin;
     NSSize size;
-}
-
-fn String modifier_to_str(int modifier) 
-{
-    DString result;
-	if ((modifier & EventModifierFlag.CAPS_LOCK.val) == EventModifierFlag.CAPS_LOCK.val) result.append(string::tformat("%s", "CapsLock, "));
-	if ((modifier & EventModifierFlag.SHIFT.val) == EventModifierFlag.SHIFT.val) result.append(string::tformat("%s", "NShift, "));
-	if ((modifier & EventModifierFlag.CONTROL.val) == EventModifierFlag.CONTROL.val) result.append(string::tformat("%s", "Control, "));
-	if ((modifier & EventModifierFlag.OPTION.val) == EventModifierFlag.OPTION.val) result.append(string::tformat("%s", "Option, "));
-	if ((modifier & EventModifierFlag.COMMAND.val) == EventModifierFlag.COMMAND.val) result.append(string::tformat("%s", "Command, "));
-	if ((modifier & EventModifierFlag.NUMERIC_PAD.val) == EventModifierFlag.NUMERIC_PAD.val) result.append(string::tformat("%s", "NumericPad, "));
-	if ((modifier & EventModifierFlag.HELP.val) == EventModifierFlag.HELP.val) result.append(string::tformat("%s", "Help, "));
-	if ((modifier & EventModifierFlag.FUNCTION.val) == EventModifierFlag.FUNCTION.val) result.append(string::tformat("%s", "Function, "));
-    // remove last ", " if present
-    return result.len() == 0 ? result.str_view() : result.str_view()[..^3]; 
 }

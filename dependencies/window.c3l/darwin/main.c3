@@ -40,6 +40,10 @@ fn Window! new(Params params, String name) {
     window_title.stringWithUTF8String((ZString)name);
     win.setTitle(window_title);
 
+    int view = win.contentView();
+    io::printfn("%d", view);
+    //win.wantsLayer(true);
+
     NSObject delegate = NSObject.new("NSObject");
     delegate.alloc_class_pair("WindowDelegate", 0);
     delegate.add_ivar("NSWindow", $sizeof(win), math::log2($sizeof(win)), "L")!!;
@@ -48,22 +52,24 @@ fn Window! new(Params params, String name) {
     delegate.init();
     delegate.setInstanceVariable("NSWindow", win);
     win.setDelegate(delegate);
+
     win.makeKeyAndOrderFront(null);
     win.setIsVisible(true);
+  
     app.activateIgnoringOtherApps(true);
     app.finishLaunching();
 
-   Window response = Window {
+    Window response = Window {
         .src = {
             .window = win,
             .app = app,
         }
-   };
+    };
 
     foreach (index, item: EventKey.values) {
         response.event_map[index] = {
-           .key = item,
-           .selected = false
+            .key = item,
+            .selected = false
         };
     }
 
@@ -89,9 +95,8 @@ fn Event Window.getEvent(&self) {
     int type = event.get_type();
 
     if (type != 0) {
-        
         NSPoint pos = event.locationInWindow();
-        // EventKey value = @enum_from_value(EventKey, value, event.value)!!;
+        // EventKey value = ;
         event_response = Event {
             .type = @enum_from_value(EventType, value, type)!!,
             // .value = value,
@@ -103,27 +108,31 @@ fn Event Window.getEvent(&self) {
             case LEFT_MOUSE_UP: 
             case RIGHT_MOUSE_UP:
             {
-                // foreach (&item: self.event_map) {
-                //     if (item.key == value) {
-                //         item.selected = false;
-                //         break;
-                //     };
-                // };
+
             }
             case LEFT_MOUSE_DOWN:
             case RIGHT_MOUSE_DOWN: {
-                // foreach (&item: self.event_map) {
-                //     if (item.key == value) {
-                //         item.selected = true;
-                //         break;
-                //     };
-                // };
                 break;
             }
-            case KEY_PRESSED:
+            case KEY_PRESSED: {
+                int key = event.get_key();
+                event_response.value = @enum_from_value(EventKey, value, key)!!;
+                foreach (&item: self.event_map) {
+                    if (item.key == event_response.value) {
+                        item.selected = true;
+                        break;
+                    };
+                };
+            }
             case KEY_RELEASED: {
                 int key = event.get_key();
-                io::printfn("%d", key);
+                event_response.value = @enum_from_value(EventKey, value, key)!!;
+                foreach (&item: self.event_map) {
+                    if (item.key == event_response.value) {
+                        item.selected = false;
+                        break;
+                    };
+                };
             }
             default: {};
         }
@@ -136,9 +145,8 @@ fn Event Window.getEvent(&self) {
 
 fn void Window.free(&self) {
     self.src.window.release();
-    self.src.app.release();
+    self.src.app.terminate();
 }
-
 
 enum EventType : uint (uint value)
 {
@@ -180,35 +188,34 @@ enum EventType : uint (uint value)
 
 enum EventKey : uint (uint value)
 {
-    EMPTY_KEY = 0,
-    ESCAPE = 9,
-    A = 1,
-    B = 56,
-    C = 54,
-    D = 40,
-    E = 26,
-    F = 41,
-    G = 42,
-    H = 43,
-    I = 31,
-    J = 44,
-    K = 45,
-    L = 46,
-    M = 58,
-    N = 57,
-    O = 32,
-    P = 33,
-    Q = 24,
-    R = 27,
-    S = 39,
-    T = 28,
-    U = 30,
-    V = 55,
-    W = 25,
-    X = 53,
-    Y = 29,
-    Z = 52,
+    A = 0,
+    B = 11,
+    C = 8,
+    D = 2,
+    E = 14,
+    F = 3,
+    G = 5,
+    H = 4,
+    I = 34,
+    J = 38,
+    K = 40,
+    L = 37,
+    M = 46,
+    N = 45,
+    O = 31,
+    P = 35,
+    Q = 12,
+    R = 15,
+    S = 1,
+    T = 17,
+    U = 32,
+    V = 9,
+    W = 13,
+    X = 7,
+    Y = 16,
+    Z = 6,
 
+    ESCAPE = 53,
     RETURN = 36,
     DELETE = 119,   
     NUMLOCK = 77,  
@@ -226,5 +233,36 @@ enum EventKey : uint (uint value)
     NUM_8 = 81,   
     NUM_9 = 90,    
     PERIOD = 91,    
-    KP_RETURN = 104
+    KP_RETURN = 104,
+    F1 = 122,
+    F2 = 120,
+    F3 = 99,
+    F4 = 118,
+    F5 = 96,
+    F6 = 97,
+    F7 = 98,
+    F8 = 100,
+    F9 = 101,
+    F10 = 109,
+    F11 = 103,
+    F12 = 111,
+    F13 = 105,
+    F14 = 107,
+    F15 = 113,
+    F16 = 106,
+    F17 = 64,
+    F18 = 79,
+    F19 = 80,
+    F20 = 90,
+    VOLUME_UP = 72,
+    VOLUME_DOWN = 73,
+    MUTE = 74,
+    HOME = 115,
+    END = 119,
+    PAGE_UP = 116,
+    PAGE_DOWN = 121,
+    LEFT_ARROW = 123,
+    RIGHT_ARROW = 124,
+    DOWN_ARROW = 125,
+    UP_ARROW = 126
 }
