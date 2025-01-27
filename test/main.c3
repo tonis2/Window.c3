@@ -19,14 +19,9 @@ fn void main(String[] args)
     bool running = true;
     while (running) {
         c3w::Event event = win.getEvent();
-        // switch (event.type) {
-        //     case MOUSE_RELEASED: {}
-        //     case KEY_PRESSED: {
-        //         if (event.value == ESCAPE) running = false;
-        //     }
-        //     default: {
-                
-        //     }
-        // }
-    }
+
+        if (win.is_pressed(ESCAPE)) {
+            running = false;
+        }
+    }    
 }
