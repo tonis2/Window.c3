@@ -98,7 +98,7 @@ fn Event Window.getEvent(&self) {
         NSPoint pos = event.locationInWindow();
         // EventKey value = ;
         event_response = Event {
-            .type = @enum_from_value(EventType, value, type)!!,
+            .type = @enum_from_value(EventType, value, type) ?? (EventType)0,
             // .value = value,
             .mouse_x = (float)pos.x,
             .mouse_y = (float)pos.y,
@@ -150,6 +150,8 @@ fn void Window.free(&self) {
 
 enum EventType : uint (uint value)
 {
+    EMPTY_KEY = 0,
+
     LEFT_MOUSE_DOWN     = 1,
 	LEFT_MOUSE_UP       = 2,
 	RIGHT_MOUSE_DOWN    = 3,
