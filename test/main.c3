@@ -13,7 +13,7 @@ fn void main(String[] args)
         },
         name: "Window"
     )!!;
-
+    
     defer win.free();
     
     bool running = true;

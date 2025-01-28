@@ -7,6 +7,7 @@ import std::os::macos::objc;
 struct DarwinWindow {
     NSWindow window;
     NSApplication app;
+    NSView view;
     CALayer layer;
 }
 
@@ -57,13 +58,15 @@ fn Window! new(Params params, String name) {
     app.finishLaunching();
 
     NSView view = win.contentView();
-    CALayer layer = view.get_layer();
+    // view.wants_Layer(true);
+    // CALayer layer = view.get_layer();
+    // void* frame = view.get_frame();
 
     Window response = Window {
         .src = {
             .window = win,
             .app = app,
-            .layer = layer
+            .view = view
         }
     };
 
@@ -117,7 +120,7 @@ fn Event Window.getEvent(&self) {
             }
             case KEY_PRESSED: {
                 int key = event.get_key();
-                event_response.value = @enum_from_value(EventKey, value, key)!!;
+                event_response.value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
                 foreach (&item: self.event_map) {
                     if (item.key == event_response.value) {
                         item.selected = true;
@@ -127,7 +130,7 @@ fn Event Window.getEvent(&self) {
             }
             case KEY_RELEASED: {
                 int key = event.get_key();
-                event_response.value = @enum_from_value(EventKey, value, key)!!;
+                event_response.value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
                 foreach (&item: self.event_map) {
                     if (item.key == event_response.value) {
                         item.selected = false;
