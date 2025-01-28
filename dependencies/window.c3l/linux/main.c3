@@ -203,8 +203,8 @@ fn Event Window.getEvent(&self) {
    defer free(event);
       
    if (event != null) {
-        EventType type = @enum_from_value(EventType, value, event.type) ?? (EventType)0;
-        EventKey value = @enum_from_value(EventKey, value, event.value) ?? (EventKey)0;
+        EventType type = @enum_from_value(EventType, value, event.type)!!;
+        EventKey value = @enum_from_value(EventKey, value, event.value)!!;
     
         event_response = Event {
             .type = type,

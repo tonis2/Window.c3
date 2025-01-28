@@ -14,7 +14,7 @@ fn void main(String[] args)
         name: "Window"
     )!!;
     
-    io::printfn("%s", win.src.layer.id);
+    // io::printfn("%s", win.src.layer.id);
     defer win.free();
     
     bool running = true;
