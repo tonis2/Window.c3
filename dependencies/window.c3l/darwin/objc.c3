@@ -46,9 +46,9 @@ def NSWindow = NSObject;
 def NSAutoreleasePool = NSObject;
 def NSValue = NSObject;
 def NSDate = NSObject;
+def CALayer = NSObject;
+def NSView = NSObject;
 
-distinct NSView = void*;
-distinct CALayer = void*;
 distinct NSEvent = void*;
 distinct NSStatusBarItem = void*;
 
@@ -193,8 +193,6 @@ fn void NSWindow.setIsVisible(&self, bool flag)
     objc::msg_send(self.id, SendBool, "setIsVisible:", flag);
 }
 
-<* @require self.id `NSWindow is not initialized` *>
-fn NSView NSWindow.contentView(&self) => (NSView)objc::msg_send(self, GetPtr, "contentView");
 
 fn void NSObject.alloc(&self)
 {
@@ -244,9 +242,14 @@ fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
 fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
 fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
-fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
-fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self, SendBool, "setWantsLayer:", value);
-fn CALayer NSView.get_layer(self) => (CALayer)objc::msg_send(self, GetPtr, "layer");
+// fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
+
+fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);
+fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId, "setLayer:", layer.id);
+
+
+<* @require self.id `NSWindow is not initialized` *>
+fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
 
 struct NSPoint {
     double x;
