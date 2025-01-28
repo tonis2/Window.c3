@@ -35,7 +35,6 @@ struct NSObject {
     ObjcId* id;
 }
 
-
 def NSApplication = NSObject;
 def NSStatusBar = NSObject;
 def NSImage = NSObject;
