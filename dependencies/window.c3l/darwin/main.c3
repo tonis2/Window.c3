@@ -35,6 +35,7 @@ fn Window! new(Params params, String name) {
 
     NSWindow win = NSObject.new("NSWindow");
     win.alloc();
+
     ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val | WindowStyleMask.TITLED.val | WindowStyleMask.RESIZABLE.val;
     win.initWithContentRect(NSRect {{params.x, params.y}, {params.width, params.height}}, window_style, window_style, false);
    
@@ -57,16 +58,24 @@ fn Window! new(Params params, String name) {
     app.activateIgnoringOtherApps(true);
     app.finishLaunching();
 
-    NSView view = win.contentView();
-    // view.wants_Layer(true);
-    // CALayer layer = view.get_layer();
-    // void* frame = view.get_frame();
+    NSView view = NSObject.new("NSView");
+    view.alloc();
+    view.init();
 
+    CALayer layer = NSObject.new("CAMetalLayer");
+    layer.alloc();
+    layer.init();
+
+    view.set_layer(layer);
+    view.wants_Layer(true);
+    win.set_view(view);
+  
     Window response = Window {
         .src = {
             .window = win,
             .app = app,
-            .view = view
+            .view = view,
+            .layer = layer
         }
     };
 
