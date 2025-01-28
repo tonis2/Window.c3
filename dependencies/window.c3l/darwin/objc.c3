@@ -250,7 +250,13 @@ fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId,
 
 <* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
-fn int NSWindow.get_view(&self) => objc::msg_send(self.id, GetInt, "contentView");
+
+fn NSView NSWindow.get_view(&self) {
+    return NSObject {
+        .cls = objc::getClass("NSView"),
+        .id = objc::msg_send(self.id, GetID, "contentView")
+    };
+}
 
 struct NSPoint {
     double x;
