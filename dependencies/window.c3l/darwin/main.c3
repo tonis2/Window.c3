@@ -58,9 +58,10 @@ fn Window! new(Params params, String name) {
     app.activateIgnoringOtherApps(true);
     app.finishLaunching();
 
-    NSView view = NSObject.new("NSView");
-    view.alloc();
-    view.init();
+    NSView view = win.get_view();
+    // NSObject.new("NSView");
+    // view.alloc();
+    // view.init();
 
     CALayer layer = NSObject.new("CAMetalLayer");
     layer.alloc();
