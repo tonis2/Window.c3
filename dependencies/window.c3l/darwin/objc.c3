@@ -245,6 +245,7 @@ fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
 fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
+fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self, SendBool, "setWantsLayer:", value);
 fn CALayer NSView.get_layer(self) => (CALayer)objc::msg_send(self, GetPtr, "layer");
 
 struct NSPoint {
