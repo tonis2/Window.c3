@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX);
+module c3w @if(env::LINUX && $feature(X11)) @link("X11", "xcb");
 import std::math;
 import vk;
 import std::io;

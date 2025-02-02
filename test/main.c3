@@ -1,7 +1,6 @@
 import c3w;
 import std;
 
-
 fn void main(String[] args)
 {
     c3w::Window win = c3w::new(
@@ -13,16 +12,15 @@ fn void main(String[] args)
         },
         name: "Window"
     )!!;
-    
-    // io::printfn("%s", win.src.layer.id);
+
     defer win.free();
     
-    bool running = true;
-    while (running) {
-        c3w::Event event = win.getEvent();
+    // bool running = true;
+    // while (running) {
+    //     c3w::Event event = win.getEvent();
 
-        if (win.is_pressed(ESCAPE)) {
-            running = false;
-        }
-    }    
+    //     if (win.is_pressed(ESCAPE)) {
+    //         running = false;
+    //     }
+    // }    
 }
