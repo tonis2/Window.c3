@@ -10,7 +10,7 @@ def ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
 
 def Registry = void*;
 def Proxy = void*;
-def Interface = void*;
+// def Interface = void*;
 def Compositor = void*;
 def Shell = void*;
 def Surface = void*;
@@ -25,11 +25,11 @@ struct LinuxWindow {
     Surface surface;
 }
 
-// struct WLMessage {
-//     char* name;
-//     char* signature;
-//     char* types;
-// }
+struct WLMessage {
+    char* name;
+    char* signature;
+    char* types;
+}
 
 struct RegistryListener {
     GlobalListener global;
@@ -48,15 +48,28 @@ struct MouseParams {
     ushort root_y;
 }
 
+struct Interface {
+	char* name;
+	int version;
+	int method_count;
+	Message* methods;
+	int event_count;
+	Message* events;
+}
+
 const uint WL_DISPLAY_GET_REGISTRY = 1;
 const uint WL_REGISTRY_BIND = 0;
 const uint WL_MARSHAL_FLAG_DESTROY = 1 << 0;
 
 extern Interface registry_interface @extern("wl_registry_interface");
 extern Interface compositor_interface @extern("wl_compositor_interface");
-extern Interface surface_interface @extern("wl_surface_interface");
-Interface wm_base_interface @export("xdg_wm_base_interface");
-Interface xdg_surface_interface @export("xdg_surface_interface");
+extern Interface wl_surface_interface @extern("wl_surface_interface");
+extern Interface shell_surface_interface @extern("wl_shell_surface_interface");
+extern Interface shell_interface @extern("wl_shell_interface");
+
+
+// Interface wm_base_interface @export("xdg_wm_base_interface");
+// Interface xdg_surface_interface @export("xdg_surface_interface");
 
 extern fn vk::Display connect(uint* window) @extern("wl_display_connect");
 extern fn void disconnect(vk::Display display) @extern("wl_display_disconnect");
@@ -74,19 +87,19 @@ fn void surface_commit(Surface surface) => proxy_marshal_flags(surface, 6, null,
 
 fn Registry get_registry(vk::Display display) => proxy_marshal_flags(display, WL_DISPLAY_GET_REGISTRY, &registry_interface, 1, 0, null);
 fn void* registry_bind(Registry registry, uint name, Interface* inter, uint version, char* interface_name) => proxy_marshal_flags(registry, WL_REGISTRY_BIND, inter, version, 0, name, interface_name, version, null);
-fn Surface create_surface(Compositor compositor) => proxy_marshal_flags(compositor, 0, &surface_interface, proxy_get_version(compositor), 0, null);
+fn Surface create_surface(Compositor compositor) => proxy_marshal_flags(compositor, 0, &wl_surface_interface, proxy_get_version(compositor), 0, null);
+fn ShellSurface get_shell_surface(Shell shell, Surface surface) => proxy_marshal_flags(shell, 0, &shell_surface_interface, proxy_get_version(shell), 0, null, surface);
 //fn Surface create_xdg_surface(Shell shell, Surface surface) => proxy_marshal_flags(shell, 2, &xdg_surface_interface, proxy_get_version(shell), 0, null, surface);
-
 
 fn void removeRegistry(void* data, Registry registry, uint name)
 {
-    io::printfn("%d", name);
+    io::printfn("%d", name);             
 }
 
 fn void shellPing(LinuxWindow* window, Shell shell, uint serial)
 {
     io::printfn("shell ping");
-    proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
+    // proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
 }
 
 RegistryListener registryListener = {
@@ -108,12 +121,10 @@ fn void handleRegistry(LinuxWindow* window, Registry registry, uint name, char* 
     }
 
     if (action_name == "xdg_wm_base") {
-        window.shell = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &wm_base_interface, version, 0, name, interface_name, version, null);
+        window.shell = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &shell_interface, version, 0, name, interface_name, version, null);
         proxy_add_listener(window.shell, &shellListener, window);
     }
 }
-
-
 
 // Creates new XCB window
 fn Window! new(Params params, String name) {
@@ -135,9 +146,7 @@ fn Window! new(Params params, String name) {
     assert(window.src.surface);
     assert(window.src.shell);
     surface_commit(window.src.surface);
-    // ShellSurface shell_surface = create_xdg_surface(window.src.shell, window.src.surface);
-    // assert(proxy_marshal_flags(window.src.shell, 0, &xdg_surface_interface, 1, 0, null, null, window.src.surface ));
-
+    ShellSurface shell_surface = get_shell_surface(window.src.shell, window.src.surface);
     //assert(shell_surface);
 
     return window;

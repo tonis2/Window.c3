@@ -6,7 +6,7 @@
       "sources": ["darwin/main.c3", "darwin/objc.c3", "main.c3"]
     },
     "linux-x64" : {
-      "sources": ["linux/wayland.c3", "linux/x11.c3", "main.c3"],
+      "sources": ["linux/wayland.c3", "linux/xdg_shell.c3", "linux/x11.c3", "main.c3"],
       "linked-libraries" : []
     },
     "windows-x64" : {
