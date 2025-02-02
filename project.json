@@ -12,12 +12,13 @@
 	"targets": {
 		"cube": {
 			"type": "executable",
-			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
+			"sources": ["./cube/main.c3", "./cube/camera.c3"],
 			"dependencies": []
 		},
 		"test": {
 			"type": "executable",
-			"sources-add": ["./test/main.c3"],
+			"sources": ["./test/main.c3"],
+			"features": ["WAYLAND"],
 			"dependencies": []
 		},
 		"zip": {
