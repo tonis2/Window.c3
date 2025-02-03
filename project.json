@@ -13,7 +13,8 @@
 		"cube": {
 			"type": "executable",
 			"sources": ["./cube/main.c3", "./cube/camera.c3"],
-			"dependencies": []
+			"dependencies": [],
+			"features": ["X11"]
 		},
 		"test": {
 			"type": "executable",
