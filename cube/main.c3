@@ -182,7 +182,7 @@ fn void! main(String[] args)
         PhysicalDeviceProperties properties;
         vk::getPhysicalDeviceProperties(entry, &properties);
         assert(surface.checkSurfaceSupport((usz)queue_index, entry)!!);
- 
+        
         if (queue_index >= 0 && supports_extensions && properties.vendorID != 0) {
             io::printfn("Device selected %s", (ZString)properties.deviceName[0..]);
             physical_device = entry;
@@ -314,47 +314,31 @@ fn void! main(String[] args)
         .size = 20_000_000
     }.build()!;
 
-    // Create buffers, using only memory of the allocator
-    MemoryBlock vertex_buffer = vk::bufferCreateInfo()
-               .setUsage(vk::BUFFER_USAGE_VERTEX_BUFFER_BIT | vk::BUFFER_USAGE_INDEX_BUFFER_BIT | vk::BUFFER_USAGE_TRANSFER_DST_BIT)
-               .setSharingMode(vk::SHARING_MODE_EXCLUSIVE)
-               .setSize(Vertex.sizeof * vertices.len)
-               .bind(&device_allocation)!;
+ 
+    Memory vertex_buffer = vk::new_buffer(
+        vk::BUFFER_USAGE_VERTEX_BUFFER_BIT | vk::BUFFER_USAGE_TRANSFER_DST_BIT,
+        &device_allocation,
+        vertices.ptr,
+        data_size: Vertex.sizeof * vertices.len,
+        stage_allocator: &local_allocation,
+        queue: &graphics_queue
+    )!!;
 
-    MemoryBlock index_buffer = vk::bufferCreateInfo()
-                .setUsage(vk::BUFFER_USAGE_INDEX_BUFFER_BIT | vk::BUFFER_USAGE_TRANSFER_DST_BIT)
-                .setSharingMode(vk::SHARING_MODE_EXCLUSIVE)
-                .setSize(indices.len * ushort.sizeof)
-                .bind(&device_allocation)!;
+    Memory index_buffer = vk::new_buffer(
+        vk::BUFFER_USAGE_INDEX_BUFFER_BIT | vk::BUFFER_USAGE_TRANSFER_DST_BIT,
+        &device_allocation,
+        indices.ptr,
+        data_size: indices.len * ushort.sizeof,
+        stage_allocator: &local_allocation,
+        queue: &graphics_queue
+    )!!;
 
-    MemoryBlock uniform_buffer = vk::bufferCreateInfo()
-                .setUsage(vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT)
-                .setSharingMode(vk::SHARING_MODE_EXCLUSIVE)
-                .setSize(UniformData.sizeof)
-                .bind(&local_allocation)!;
-
-
-    // Create stage buffers and then copy the data to GPU only buffers
-    usz buffer_size = Vertex.sizeof * vertices.len + ushort.sizeof * indices.len;
-    vk::@upload_from_stage(size: buffer_size, queue: graphics_queue, allocator: local_allocation; MemoryBlock stage_buffer, CommandBuffer command_buffer) {
-        stage_buffer.push(indices, ushort.sizeof * indices.len);
-        stage_buffer.push(vertices, Vertex.sizeof * vertices.len);
-
-        vk::cmdCopyBuffer(command_buffer, stage_buffer.buffer, index_buffer.buffer, 1, &&BufferCopy {
-             .srcOffset = 0,
-             .dstOffset = 0,
-             .size = ushort.sizeof * indices.len
-         });
-
-         vk::cmdCopyBuffer(command_buffer, stage_buffer.buffer, vertex_buffer.buffer, 1, &&BufferCopy {
-            .srcOffset = ushort.sizeof * indices.len,
-            .dstOffset = 0,
-            .size = Vertex.sizeof * vertices.len
-         });
-    }!;
-
-    // Add data for uniform buffer
-    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+    Memory uniform_buffer = vk::new_buffer(
+        vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        &local_allocation,
+        &&camera.matrix(),
+        data_size: UniformData.sizeof
+    )!!;   
 
     // Set-up descriptor info for uniform buffer usage
     DescriptorSetLayout descriptor_set_layout = vk::descriptorSetLayoutCreateInfo()
@@ -535,11 +519,22 @@ fn void! main(String[] args)
     Vec2f prev_mouse;
     while (running) {
         c3w::Event event = win.getEvent();
+
         if (win.is_pressed(LEFT_MOUSE)) {
             Vec2f mouse_pos = win.getMousePos();
             camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
             uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
             prev_mouse = mouse_pos;
+        }
+
+        if (win.is_pressed(MOUSE_SCROLL_UP)) {
+            camera.zoom(5);
+             uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+        }
+
+        if (win.is_pressed(MOUSE_SCROLL_DOWN)) {
+            camera.zoom(-5);
+            uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
         }
 
         if (win.is_pressed(ESCAPE)) {
