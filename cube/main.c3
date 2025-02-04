@@ -103,7 +103,7 @@ fn void! main(String[] args)
     }
 
     if (env::OS_TYPE == LINUX) {
-        extensions.add_array({"VK_KHR_xcb_surface"});
+        extensions.add_array({"VK_KHR_xcb_surface", "VK_KHR_wayland_surface"});
     }
 
     vk::checkInstanceExtensionSupport(extensions)!;
@@ -146,14 +146,22 @@ fn void! main(String[] args)
     $switch(env::OS_TYPE)
         $case MACOS:
         $case LINUX: {
-            XcbSurfaceCreateInfoKHR createInfo = {
-                vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, 
+            WaylandSurfaceCreateInfoKHR createInfo = {
+                vk::STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR, 
                 null, 
                 0, 
-                win.src.connection,
-                win.src.window,
+                win.src.display,
+                win.src.surface,
             };
-            vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
+            vk::createWaylandSurfaceKHR(instance, &createInfo, null, &surface)!!;
+            // XcbSurfaceCreateInfoKHR createInfo = {
+            //     vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, 
+            //     null, 
+            //     0, 
+            //     win.src.connection,
+            //     win.src.window,
+            // };
+            // vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
         }
         $case WIN32: {
             Win32SurfaceCreateInfoKHR createInfo = {
@@ -251,7 +259,7 @@ fn void! main(String[] args)
     SurfaceFormatKHR format = SurfaceFormatKHR {.format = vk::FORMAT_B8G8R8A8_UNORM, .colorSpace = vk::COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
     uint min_images = capabilities.maxImageCount != 0 ? capabilities.maxImageCount : capabilities.minImageCount + 2;
-    Extent2D extent = capabilities.maxImageExtent;
+    Extent2D extent = Extent2D { WIDTH, HEIGHT};
 
     SwapchainCreateInfoKHR swapchain_info = vk::swapchainCreateInfoKHR()
       .setMinImageCount(min_images)

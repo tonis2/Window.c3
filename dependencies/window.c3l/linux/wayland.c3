@@ -1,28 +1,27 @@
 module c3w @if(env::LINUX && $feature(WAYLAND)) @link("wayland-client");
 import std::math;
-import vk;
 import std::io;
 import std::core::types;
 
-def GlobalListener = fn void (LinuxWindow* data, void* wl_registry, uint name, char* iface, uint ver);
-def RemoveListener = fn void (void* data, void* wl_registry, uint name);
+def GlobalEvent = fn void (LinuxWindow* data, void* wl_registry, uint name, char* iface, uint ver);
+def RemoveEvent = fn void (void* data, void* wl_registry, uint name);
 def ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
+
 
 def Registry = void*;
 def Proxy = void*;
-// def Interface = void*;
 def Compositor = void*;
 def Shell = void*;
 def Surface = void*;
-def ShellSurface = void*;
+def SubCompositor = void*;
+def Display = void*;
 
 struct LinuxWindow {
-    vk::Display display;
-    vk::Connection connection;
-    vk::Window window;
-    Compositor compositor;
-    Shell shell;
+    Display display;
     Surface surface;
+    Shell shell;
+    XDG_surface xdg_surface;
+    XDG_top_level top_level;
 }
 
 struct WLMessage {
@@ -32,8 +31,8 @@ struct WLMessage {
 }
 
 struct RegistryListener {
-    GlobalListener global;
-    RemoveListener global_remove;
+    GlobalEvent global;
+    RemoveEvent global_remove;
 }
 
 struct ShellListener {
@@ -61,35 +60,30 @@ const uint WL_DISPLAY_GET_REGISTRY = 1;
 const uint WL_REGISTRY_BIND = 0;
 const uint WL_MARSHAL_FLAG_DESTROY = 1 << 0;
 
-extern Interface registry_interface @extern("wl_registry_interface");
-extern Interface compositor_interface @extern("wl_compositor_interface");
+extern Interface wl_registry_interface @extern("wl_registry_interface");
+extern Interface wl_compositor_interface @extern("wl_compositor_interface");
 extern Interface wl_surface_interface @extern("wl_surface_interface");
-extern Interface shell_surface_interface @extern("wl_shell_surface_interface");
-extern Interface shell_interface @extern("wl_shell_interface");
+extern Interface wl_shell_interface @extern("wl_shell_interface");
+extern Interface wl_output_interface @extern("wl_output_interface");
+extern Interface wl_seat_interface @extern("wl_seat_interface");
+extern Interface wl_subcompositor_interface @extern("wl_subcompositor_interface");
 
 
-// Interface wm_base_interface @export("xdg_wm_base_interface");
-// Interface xdg_surface_interface @export("xdg_surface_interface");
-
-extern fn vk::Display connect(uint* window) @extern("wl_display_connect");
-extern fn void disconnect(vk::Display display) @extern("wl_display_disconnect");
+extern fn Display connect(uint* window) @extern("wl_display_connect");
+extern fn void disconnect(Display display) @extern("wl_display_disconnect");
+extern fn void subcompositor_surface(Display display) @extern("wl_subcompositor_get_subsurface");
 extern fn void* proxy_marshal_flags(Proxy proxy, uint opcode, void* inter, uint version, uint flags, ...) @extern("wl_proxy_marshal_flags");
 extern fn int proxy_add_listener(Proxy registry, void* callback, void* data) @extern("wl_proxy_add_listener");
 
-extern fn void wm_base_listener(Shell shell, ShellListener* listener, void* data) @extern("xdg_wm_base_add_listener");
 extern fn void proxy_destroy(Proxy proxy) @extern("wl_proxy_destroy");
-fn void surface_destroy(Surface surface) => proxy_marshal_flags(surface, 0, null, proxy_get_version(surface), WL_MARSHAL_FLAG_DESTROY);
 
 extern fn uint proxy_get_version(Proxy proxy) @extern("wl_proxy_get_version");
-extern fn int dispatch(vk::Display display) @extern("wl_display_dispatch");
-extern fn int rountrip(vk::Display display) @extern("wl_display_roundtrip");
-fn void surface_commit(Surface surface) => proxy_marshal_flags(surface, 6, null, proxy_get_version(surface), 0);
+extern fn int dispatch(Display display) @extern("wl_display_dispatch");
+extern fn int rountrip(Display display) @extern("wl_display_roundtrip");
 
-fn Registry get_registry(vk::Display display) => proxy_marshal_flags(display, WL_DISPLAY_GET_REGISTRY, &registry_interface, 1, 0, null);
-fn void* registry_bind(Registry registry, uint name, Interface* inter, uint version, char* interface_name) => proxy_marshal_flags(registry, WL_REGISTRY_BIND, inter, version, 0, name, interface_name, version, null);
-fn Surface create_surface(Compositor compositor) => proxy_marshal_flags(compositor, 0, &wl_surface_interface, proxy_get_version(compositor), 0, null);
-fn ShellSurface get_shell_surface(Shell shell, Surface surface) => proxy_marshal_flags(shell, 0, &shell_surface_interface, proxy_get_version(shell), 0, null, surface);
-//fn Surface create_xdg_surface(Shell shell, Surface surface) => proxy_marshal_flags(shell, 2, &xdg_surface_interface, proxy_get_version(shell), 0, null, surface);
+fn void surface_commit(Surface surface) => proxy_marshal_flags(surface, 6, null, proxy_get_version(surface), 0);
+fn Registry get_registry(Display display) => proxy_marshal_flags(display, WL_DISPLAY_GET_REGISTRY, &wl_registry_interface, 1, 0, null);
+
 
 fn void removeRegistry(void* data, Registry registry, uint name)
 {
@@ -99,8 +93,29 @@ fn void removeRegistry(void* data, Registry registry, uint name)
 fn void shellPing(LinuxWindow* window, Shell shell, uint serial)
 {
     io::printfn("shell ping");
-    // proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
+    // Pong back the ping
+    proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
 }
+
+fn void shellSurfaceConfigure(LinuxWindow* window, XDG_surface surface, uint serial)
+{
+    proxy_marshal_flags(surface, 4, null, proxy_get_version(surface), 0, serial);
+    io::printfn("shell configure");
+}
+
+fn void topSurfaceConfigure(LinuxWindow* data, XDG_top_level top_level, int width, int height, void* states)
+{
+    io::printfn("surface resized");
+}
+
+fn void topSurfaceClose(LinuxWindow* data, XDG_top_level top_level)
+{
+    io::printfn("surface closed");
+}
+
+ShellSurfaceListener shellSurfaceListener = {
+    &shellSurfaceConfigure
+};
 
 RegistryListener registryListener = {
     &handleRegistry,
@@ -111,45 +126,65 @@ ShellListener shellListener = {
     &shellPing,
 };
 
+TopSurfaceListener topSurfaceListener = {
+    &topSurfaceConfigure,
+    &topSurfaceClose
+};
+
 fn void handleRegistry(LinuxWindow* window, Registry registry, uint name, char* interface_name, uint version)
 {
     String action_name = ((ZString)interface_name).str_view();
 
     if (action_name == "wl_compositor") {
-        window.compositor = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &compositor_interface, version, 0, name, interface_name, version, null);
-        window.surface = create_surface(window.compositor);
+        Compositor compositor = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &wl_compositor_interface, version, 0, name, interface_name, version, null);
+        window.surface = proxy_marshal_flags(compositor, 0, &wl_surface_interface, proxy_get_version(compositor), 0, null);
     }
 
     if (action_name == "xdg_wm_base") {
-        window.shell = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &shell_interface, version, 0, name, interface_name, version, null);
+        window.shell = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &xdg_wm_base_interface, version, 0, name, interface_name, version, null);
         proxy_add_listener(window.shell, &shellListener, window);
     }
 }
 
 // Creates new XCB window
 fn Window! new(Params params, String name) {
-    Window window;
+    LinuxWindow window;
 
-    vk::Display display = connect(null);
+    Display display = connect(null);
     if (display == null) return WindowError.FAILED_OPENING_WINDOW?;
 
-    window.src.display = display;
+    window.display = display;
 
     Registry registry = get_registry(display);
     if (registry == null) return WindowError.FAILED_OPENING_WINDOW?;
-    proxy_add_listener(registry, &registryListener, &window.src);
-
-    dispatch(display);
+    proxy_add_listener(registry, &registryListener, &window);
     rountrip(display);
 
-    assert(window.src.compositor);
-    assert(window.src.surface);
-    assert(window.src.shell);
-    surface_commit(window.src.surface);
-    ShellSurface shell_surface = get_shell_surface(window.src.shell, window.src.surface);
-    //assert(shell_surface);
+    assert(window.surface);
+    assert(window.shell);
+    
+    //Get XDG surface
+    window.xdg_surface = proxy_marshal_flags(window.shell, 2, &xdg_surface_interface, proxy_get_version(window.shell), 0, null, window.surface);
+    assert(window.xdg_surface);
+    proxy_add_listener(window.xdg_surface, &shellSurfaceListener, &window);
 
-    return window;
+    window.top_level = proxy_marshal_flags(window.xdg_surface, 1, &xdg_toplevel_interface, proxy_get_version(window.xdg_surface), 0, null);
+    proxy_add_listener(window.top_level, &topSurfaceListener, &window);
+    assert(window.top_level);
+
+    // set maximized
+    // proxy_marshal_flags(top_level, 9, &xdg_toplevel_interface, proxy_get_version(top_level), 0, null);
+    // Set title
+    proxy_marshal_flags(window.top_level, 1, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, name);
+    // // Set id
+    proxy_marshal_flags(window.top_level, 2, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, name);
+    surface_commit(window.surface);
+    rountrip(display);
+    surface_commit(window.surface);
+
+    return {
+        .src = window
+    };
 }
 
 fn Vec2f Window.getMousePos(self) {
@@ -159,12 +194,16 @@ fn Vec2f Window.getMousePos(self) {
 
 fn Event Window.getEvent(&self) {  
     Event event_response;
+    dispatch(self.src.display);
+    
     return event_response;
 }
 
 // Free and destroys window instance
 fn void Window.free(&self) {
-    surface_destroy(self.src.surface);
+    proxy_marshal_flags(self.src.surface, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
+    proxy_marshal_flags(self.src.xdg_surface, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
+    proxy_marshal_flags(self.src.top_level, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
     disconnect(self.src.display);
 }
 
