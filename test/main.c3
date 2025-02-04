@@ -15,12 +15,13 @@ fn void main(String[] args)
 
     defer win.free();
     
-    // bool running = true;
-    // while (running) {
-    //     c3w::Event event = win.getEvent();
+    bool running = true;
+    while (running) {
 
-    //     if (win.is_pressed(ESCAPE)) {
-    //         running = false;
-    //     }
-    // }    
+        c3w::Event event = win.getEvent();
+
+        // if (win.is_pressed(ESCAPE)) {
+        //     running = false;
+        // }
+    }    
 }

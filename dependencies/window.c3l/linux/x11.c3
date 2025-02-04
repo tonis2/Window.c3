@@ -1,37 +1,40 @@
 module c3w @if(env::LINUX && $feature(X11)) @link("X11", "xcb");
 import std::math;
-import vk;
+
 import std::io;
 import std::core::types;
 
-struct LinuxWindow {
-    vk::Display display;
-    vk::Connection connection;
-    vk::Window window;
-}
-
+def Display = void*;
+def Connection = void*;
+def Window = void*;
 def XCB_setup = void*;
 
-extern fn vk::Display openDisplay(char* name) @extern("XOpenDisplay");
-extern fn vk::Connection xcbConnect(char* name, uint* window) @extern("xcb_connect");
-extern fn XCB_setup xcbGetSetup(vk::Connection connection) @extern("xcb_get_setup");
+struct LinuxWindow {
+    Display display;
+    Connection connection;
+    Window window;
+}
+
+extern fn Display openDisplay(char* name) @extern("XOpenDisplay");
+extern fn Connection xcbConnect(char* name, uint* window) @extern("xcb_connect");
+extern fn XCB_setup xcbGetSetup(Connection connection) @extern("xcb_get_setup");
 extern fn XScreenIterator* xcbRootsIterator(XCB_setup setup) @extern("xcb_setup_roots_iterator");
-extern fn vk::Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
-extern fn vk::Window xcbMapWindow(vk::Connection con, vk::Window win) @extern("xcb_map_window");
-extern fn vk::Window xcbFlush(vk::Connection con) @extern("xcb_flush");
-extern fn KeyPressEvent* xcbPollEvent(vk::Connection con) @extern("xcb_poll_for_event");
-extern fn KeyPressEvent* xcbPollQueuedEvent(vk::Connection con) @extern("xcb_poll_for_queued_event");
-extern fn KeyPressEvent* xcbWaitForEvent(vk::Connection con) @extern("xcb_wait_for_event");
-extern fn void xcbChangeProperty(vk::Connection con, XcbProp mode, vk::Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
-extern fn uint xcbQueryPointer(vk::Connection con, vk::Window window) @extern("xcb_query_pointer");
-extern fn KeyPressEvent* xcbQueryPointerReply(vk::Connection con, uint cookie, void* err) @extern("xcb_query_pointer_reply");
-extern fn uint xcbDestroy(vk::Connection con, vk::Window window) @extern("xcb_destroy_window");
-extern fn uint xcbDisconnect(vk::Connection con) @extern("xcb_disconnect");
+extern fn Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
+extern fn Window xcbMapWindow(Connection con, Window win) @extern("xcb_map_window");
+extern fn Window xcbFlush(Connection con) @extern("xcb_flush");
+extern fn KeyPressEvent* xcbPollEvent(Connection con) @extern("xcb_poll_for_event");
+extern fn KeyPressEvent* xcbPollQueuedEvent(Connection con) @extern("xcb_poll_for_queued_event");
+extern fn KeyPressEvent* xcbWaitForEvent(Connection con) @extern("xcb_wait_for_event");
+extern fn void xcbChangeProperty(Connection con, XcbProp mode, Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
+extern fn uint xcbQueryPointer(Connection con, Window window) @extern("xcb_query_pointer");
+extern fn KeyPressEvent* xcbQueryPointerReply(Connection con, uint cookie, void* err) @extern("xcb_query_pointer_reply");
+extern fn uint xcbDestroy(Connection con, Window window) @extern("xcb_destroy_window");
+extern fn uint xcbDisconnect(Connection con) @extern("xcb_disconnect");
 
 extern fn uint createWindow(
-    vk::Connection    c,
+    Connection    c,
     char              depth,
-    vk::Window        window,
+    Window        window,
     uint              parent,
     short             x,
     short             y,
@@ -134,11 +137,11 @@ fn Window! new(Params params, String name) {
         return WindowError.FAILED_OPENING_WINDOW?;
     }
 
-    vk::Connection connection = xcbConnect(null, null);
+    Connection connection = xcbConnect(null, null);
     XCB_setup setup = xcbGetSetup(connection);
     XScreenIterator* screen_iterator = xcbRootsIterator(setup);
 
-    vk::Window window = xcbWindowId(connection);
+    Window window = xcbWindowId(connection);
 
     uint mask = XcbEventMask.BACK_PIXEL.value | XcbEventMask.CW_EVENT_MASK.value;
     uint[] event_masks = {screen_iterator.data.black_pixel,
