@@ -9,10 +9,10 @@ def XDG_top_level = void*;
 
 def ShellSurfaceEvent = fn void (LinuxWindow* data, XDG_surface shell_surface, uint serial);
 
-
-
 def TopSurfaceEvent = fn void (LinuxWindow* data, XDG_top_level top_level, int width, int height, void* states);
 def TopSurfaceClose = fn void (LinuxWindow* data, XDG_top_level top_level);
+def TopSurfaceConfigureBounds = fn void (LinuxWindow* data, XDG_top_level top_level, int width, int height);
+def TopSurfaceCapabilities = fn void (LinuxWindow* data, XDG_top_level top_level, void* capabilities);
 
 struct ShellSurfaceListener {
     ShellSurfaceEvent configure;
@@ -21,6 +21,8 @@ struct ShellSurfaceListener {
 struct TopSurfaceListener {
     TopSurfaceEvent configure;
     TopSurfaceClose close;
+    TopSurfaceConfigureBounds bounds;
+    TopSurfaceCapabilities capabilities;
 }
 
 struct Message {
@@ -51,18 +53,6 @@ Interface xdg_wm_base_interface = {
 
 Interface*[] get_toplevel = { &xdg_toplevel_interface };
 Interface*[] get_popup = { &xdg_popup_interface, &wl_surface_interface, &xdg_positioner_interface };
-
-// static const struct wl_message xdg_surface_requests[] = {
-// 	{ "destroy", "", xdg_shell_types + 0 },
-// 	{ "get_toplevel", "n", xdg_shell_types + 7 },
-// 	{ "get_popup", "n?oo", xdg_shell_types + 8 },
-// 	{ "set_window_geometry", "iiii", xdg_shell_types + 0 },
-// 	{ "ack_configure", "u", xdg_shell_types + 0 },
-// };
-
-// static const struct wl_message xdg_surface_events[] = {
-// 	{ "configure", "u", xdg_shell_types + 0 },
-// };
 
 Interface xdg_surface_interface = {
     .name = "xdg_surface",
