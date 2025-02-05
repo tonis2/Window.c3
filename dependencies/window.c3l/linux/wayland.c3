@@ -4,9 +4,10 @@ import std::io;
 import std::core::types;
 
 def GlobalEvent = fn void (LinuxWindow* data, void* wl_registry, uint name, char* iface, uint ver);
-def RemoveEvent = fn void (void* data, void* wl_registry, uint name);
+def RemoveEvent = fn void (LinuxWindow* data, void* wl_registry, uint name);
 def ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
-
+def SeatCapabilitiesEvent = fn void (LinuxWindow* data, void* wl_registry, uint capabilities);
+def SeatNameEvent = fn void (LinuxWindow* data, void* wl_registry, char* name);
 
 def Registry = void*;
 def Proxy = void*;
@@ -15,13 +16,17 @@ def Shell = void*;
 def Surface = void*;
 def SubCompositor = void*;
 def Display = void*;
+def Seat = void*;
+def Keyboard = void*;
 
 struct LinuxWindow {
     Display display;
     Surface surface;
     Shell shell;
+    Seat seat;
+    Keyboard keyboard;
     XDG_surface xdg_surface;
-    XDG_top_level top_level;
+    XDG_top_level top_level;   
 }
 
 struct WLMessage {
@@ -37,6 +42,11 @@ struct RegistryListener {
 
 struct ShellListener {
     ShellPing ping;
+}
+
+struct SeatListener {
+    SeatCapabilitiesEvent capabilities;
+    SeatNameEvent name;
 }
 
 struct MouseParams {
@@ -67,7 +77,7 @@ extern Interface wl_shell_interface @extern("wl_shell_interface");
 extern Interface wl_output_interface @extern("wl_output_interface");
 extern Interface wl_seat_interface @extern("wl_seat_interface");
 extern Interface wl_subcompositor_interface @extern("wl_subcompositor_interface");
-
+extern Interface wl_keyboard_interface @extern("wl_keyboard_interface");
 
 extern fn Display connect(uint* window) @extern("wl_display_connect");
 extern fn void disconnect(Display display) @extern("wl_display_disconnect");
@@ -82,10 +92,16 @@ extern fn int dispatch(Display display) @extern("wl_display_dispatch");
 extern fn int rountrip(Display display) @extern("wl_display_roundtrip");
 
 fn void surface_commit(Surface surface) => proxy_marshal_flags(surface, 6, null, proxy_get_version(surface), 0);
+fn void* registry_bind(Registry registry, Interface* inter, int name, int version) => proxy_marshal_flags(registry, WL_REGISTRY_BIND, inter, version, 0, name, inter.name, version, null);
 fn Registry get_registry(Display display) => proxy_marshal_flags(display, WL_DISPLAY_GET_REGISTRY, &wl_registry_interface, 1, 0, null);
 
+enum SeatCapability: uint (uint value) {
+	POINTER = 1,
+	KEYBOARD = 2,
+	TOUCH = 4,
+}
 
-fn void removeRegistry(void* data, Registry registry, uint name)
+fn void removeRegistry(LinuxWindow* window, Registry registry, uint name)
 {
     io::printfn("%d", name);             
 }
@@ -123,6 +139,22 @@ fn void topSurfaceCapabilities(LinuxWindow* data, XDG_top_level top_level, void*
     io::printfn("top capabilities");
 }
 
+fn void seatCapabilities(LinuxWindow* data, Seat seat, uint capabilities)
+{
+    io::printfn("seat capabilities");
+    if (capabilities & SeatCapability.KEYBOARD.value)
+    {
+        data.keyboard = proxy_marshal_flags(seat, 1, &wl_keyboard_interface, proxy_get_version(seat), 0, null);
+        assert(data.keyboard);
+        // wl_keyboard_add_listener(kb, &kb_list, 0);
+    }
+}
+
+fn void seatName(LinuxWindow* data, Seat seat, char* name)
+{
+    io::printfn("seat name");
+}
+
 ShellSurfaceListener shellSurfaceListener = {
     &shellSurfaceConfigure
 };
@@ -143,18 +175,28 @@ TopSurfaceListener topSurfaceListener = {
     &topSurfaceCapabilities
 };
 
+SeatListener seatListener = {
+    &seatCapabilities,
+    &seatName,
+};
+
 fn void handleRegistry(LinuxWindow* window, Registry registry, uint name, char* interface_name, uint version)
 {
     String action_name = ((ZString)interface_name).str_view();
 
     if (action_name == "wl_compositor") {
-        Compositor compositor = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &wl_compositor_interface, version, 0, name, interface_name, version, null);
-        window.surface = proxy_marshal_flags(compositor, 0, &wl_surface_interface, proxy_get_version(compositor), 0, null);
+        Compositor compositor = registry_bind(registry, &wl_compositor_interface, name, version);
+        window.surface = registry_bind(compositor, &wl_surface_interface, name, version);
     }
 
     if (action_name == "xdg_wm_base") {
-        window.shell = proxy_marshal_flags(registry, WL_REGISTRY_BIND, &xdg_wm_base_interface, version, 0, name, interface_name, version, null);
+        window.shell = registry_bind(registry, &xdg_wm_base_interface, name, version);
         proxy_add_listener(window.shell, &shellListener, window);
+    }
+
+    if (action_name == "wl_seat") {
+        window.seat = registry_bind(registry, &wl_seat_interface, name, version);
+        proxy_add_listener(window.seat, &seatListener, window);
     }
 }
 
@@ -213,6 +255,8 @@ fn Event Window.getEvent(&self) {
 
 // Free and destroys window instance
 fn void Window.free(&self) {
+    proxy_destroy(self.src.keyboard);
+    proxy_marshal_flags(self.src.seat, 3, null, proxy_get_version(self.src.seat), WL_MARSHAL_FLAG_DESTROY);
     proxy_marshal_flags(self.src.surface, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
     proxy_marshal_flags(self.src.xdg_surface, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
     proxy_marshal_flags(self.src.top_level, 0, null, proxy_get_version(self.src.surface), WL_MARSHAL_FLAG_DESTROY);
