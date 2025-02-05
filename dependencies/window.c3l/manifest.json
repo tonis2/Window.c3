@@ -7,7 +7,8 @@
     },
     "linux-x64" : {
       "sources": ["linux/wayland.c3", "linux/xdg_shell.c3", "linux/x11.c3", "main.c3"],
-      "linked-libraries" : []
+      "linked-libraries" : [],
+      "c-sources" : []
     },
     "windows-x64" : {
       "c-sources" : ["win32.c"],

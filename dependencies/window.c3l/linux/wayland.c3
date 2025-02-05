@@ -105,12 +105,22 @@ fn void shellSurfaceConfigure(LinuxWindow* window, XDG_surface surface, uint ser
 
 fn void topSurfaceConfigure(LinuxWindow* data, XDG_top_level top_level, int width, int height, void* states)
 {
-    io::printfn("surface resized");
+    io::printfn("top configure");
 }
 
 fn void topSurfaceClose(LinuxWindow* data, XDG_top_level top_level)
 {
-    io::printfn("surface closed");
+    io::printfn("top closed");
+}
+
+fn void topSurfaceBounds(LinuxWindow* data, XDG_top_level top_level, int width, int height)
+{
+    io::printfn("top bounds");
+}
+
+fn void topSurfaceCapabilities(LinuxWindow* data, XDG_top_level top_level, void* capabilities)
+{
+    io::printfn("top capabilities");
 }
 
 ShellSurfaceListener shellSurfaceListener = {
@@ -128,7 +138,9 @@ ShellListener shellListener = {
 
 TopSurfaceListener topSurfaceListener = {
     &topSurfaceConfigure,
-    &topSurfaceClose
+    &topSurfaceClose,
+    &topSurfaceBounds,
+    &topSurfaceCapabilities
 };
 
 fn void handleRegistry(LinuxWindow* window, Registry registry, uint name, char* interface_name, uint version)
