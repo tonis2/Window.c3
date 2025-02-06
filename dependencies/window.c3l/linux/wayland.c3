@@ -9,6 +9,13 @@ def ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
 def SeatCapabilitiesEvent = fn void (LinuxWindow* data, void* wl_registry, uint capabilities);
 def SeatNameEvent = fn void (LinuxWindow* data, void* wl_registry, char* name);
 
+def KBmapEvent = fn void (LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz);
+def KBenterEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys);
+def KBleaveEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface);
+def KBkeyEvent = fn void (LinuxWindow* data, Keyboard kb,uint serial, uint type, uint key, uint state);
+def KBmodEvent = fn void (LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group);
+def KBrepEvent = fn void (LinuxWindow* data, Keyboard kb, int rate, int del);
+
 def Registry = void*;
 def Proxy = void*;
 def Compositor = void*;
@@ -19,6 +26,8 @@ def Display = void*;
 def Seat = void*;
 def Keyboard = void*;
 
+
+EventMap[EventKey.len] event_map;
 struct LinuxWindow {
     Display display;
     Surface surface;
@@ -26,7 +35,14 @@ struct LinuxWindow {
     Seat seat;
     Keyboard keyboard;
     XDG_surface xdg_surface;
-    XDG_top_level top_level;   
+    XDG_top_level top_level;
+    EventMap[EventKey.len]* event_map;
+}
+
+struct WLArray {
+	usz size;
+	usz alloc;
+	void *data;
 }
 
 struct WLMessage {
@@ -47,6 +63,15 @@ struct ShellListener {
 struct SeatListener {
     SeatCapabilitiesEvent capabilities;
     SeatNameEvent name;
+}
+
+struct KeyboardListener {
+    KBmapEvent keymap;
+    KBenterEvent enter;
+    KBleaveEvent leave;
+    KBkeyEvent key;
+    KBmodEvent modifiers;
+    KBrepEvent repeat_info;
 }
 
 struct MouseParams {
@@ -101,6 +126,7 @@ enum SeatCapability: uint (uint value) {
 	TOUCH = 4,
 }
 
+
 fn void removeRegistry(LinuxWindow* window, Registry registry, uint name)
 {
     io::printfn("%d", name);             
@@ -139,14 +165,13 @@ fn void topSurfaceCapabilities(LinuxWindow* data, XDG_top_level top_level, void*
     io::printfn("top capabilities");
 }
 
-fn void seatCapabilities(LinuxWindow* data, Seat seat, uint capabilities)
+fn void seatCapabilities(LinuxWindow* window, Seat seat, uint capabilities)
 {
     io::printfn("seat capabilities");
     if (capabilities & SeatCapability.KEYBOARD.value)
     {
-        data.keyboard = proxy_marshal_flags(seat, 1, &wl_keyboard_interface, proxy_get_version(seat), 0, null);
-        assert(data.keyboard);
-        // wl_keyboard_add_listener(kb, &kb_list, 0);
+        window.keyboard = proxy_marshal_flags(seat, 1, &wl_keyboard_interface, proxy_get_version(seat), 0, null);
+        proxy_add_listener(window.keyboard, &keyboardListener, window);
     }
 }
 
@@ -154,6 +179,52 @@ fn void seatName(LinuxWindow* data, Seat seat, char* name)
 {
     io::printfn("seat name");
 }
+
+fn void kbMap(LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz)
+{
+    io::printfn("kb map");
+}
+
+fn void kbEnter(LinuxWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys)
+{
+    io::printfn("kb enter");
+}
+
+fn void kbLeave(LinuxWindow* data, Keyboard kb, uint ser, Surface surface)
+{
+    io::printfn("kb leave");
+}
+
+fn void kbKey(LinuxWindow* data, Keyboard kb, uint serial, uint type, uint key, uint state)
+{
+    EventKey keyboard_key = @enum_from_value(EventKey, value, key + 8)!!;
+
+    foreach (&item: event_map) {
+        if (item.key == keyboard_key) {
+            item.selected = (bool)state;
+            break;
+        };
+    };
+}
+
+fn void kbMod(LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group)
+{
+
+}
+
+fn void kbRep(LinuxWindow* data, Keyboard kb, int rate, int del)
+{
+
+}
+
+KeyboardListener keyboardListener = {
+    &kbMap,
+    &kbEnter,
+    &kbLeave,
+    &kbKey,
+    &kbMod,
+    &kbRep
+};
 
 ShellSurfaceListener shellSurfaceListener = {
     &shellSurfaceConfigure
@@ -225,7 +296,6 @@ fn Window! new(Params params, String name) {
     window.top_level = proxy_marshal_flags(window.xdg_surface, 1, &xdg_toplevel_interface, proxy_get_version(window.xdg_surface), 0, null);
     proxy_add_listener(window.top_level, &topSurfaceListener, &window);
     assert(window.top_level);
-
     // set maximized
     // proxy_marshal_flags(top_level, 9, &xdg_toplevel_interface, proxy_get_version(top_level), 0, null);
     // Set title
@@ -236,8 +306,18 @@ fn Window! new(Params params, String name) {
     rountrip(display);
     surface_commit(window.surface);
 
+    assert(window.keyboard);
+
+    foreach (index, item: EventKey.values) {
+        event_map[index] = {
+           .key = item,
+           .selected = false
+        };
+    }
+    
+    window.event_map = &event_map;
     return {
-        .src = window
+        .src = window,
     };
 }
 
@@ -276,62 +356,4 @@ enum EventType : uint (uint value)
     QUIT = 32,
     DND = 33,
     DND_INIT = 34,
-}
-
-enum EventKey : uint (uint value)
-{
-    LEFT_MOUSE = 1,
-    MIDDLE_MOUSE = 2,
-    RIGHT_MOUSE = 3,
-    MOUSE_SCROLL_UP = 4,
-    MOUSE_SCROLL_DOWN = 5,
-    
-    EMPTY_KEY = 0,
-    ESCAPE = 9,
-    
-    A = 38,
-    B = 56,
-    C = 54,
-    D = 40,
-    E = 26,
-    F = 41,
-    G = 42,
-    H = 43,
-    I = 31,
-    J = 44,
-    K = 45,
-    L = 46,
-    M = 58,
-    N = 57,
-    O = 32,
-    P = 33,
-    Q = 24,
-    R = 27,
-    S = 39,
-    T = 28,
-    U = 30,
-    V = 55,
-    W = 25,
-    X = 53,
-    Y = 29,
-    Z = 52,
-
-    RETURN = 36,
-    DELETE = 119,   
-    NUMLOCK = 77,  
-    SLASH = 106,
-    MULTIPLY = 63,    
-    SUBTRACT = 82,  
-    NUM_0 = 87,
-    NUM_1 = 88,    
-    NUM_2 = 89, 
-    NUM_3 = 83,  
-    NUM_4 = 84,   
-    NUM_5 = 85,    
-    NUM_6 = 79, 
-    NUM_7 = 80,  
-    NUM_8 = 81,   
-    NUM_9 = 90,    
-    PERIOD = 91,    
-    KP_RETURN = 104
 }
