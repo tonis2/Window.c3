@@ -9,6 +9,7 @@ struct DarwinWindow {
     NSApplication app;
     NSView view;
     CALayer layer;
+    EventMap[EventKey.len] event_map;
 }
 
 fn bool on_close(ObjcId self)

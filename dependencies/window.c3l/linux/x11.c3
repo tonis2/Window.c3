@@ -6,35 +6,38 @@ import std::core::types;
 
 def Display = void*;
 def Connection = void*;
-def Window = void*;
+def XCB_Window = void*;
 def XCB_setup = void*;
 
 struct LinuxWindow {
     Display display;
     Connection connection;
-    Window window;
+    XCB_Window window;
+    EventMap[EventKey.len] event_map;
+    uint width;
+    uint height;
 }
 
 extern fn Display openDisplay(char* name) @extern("XOpenDisplay");
 extern fn Connection xcbConnect(char* name, uint* window) @extern("xcb_connect");
 extern fn XCB_setup xcbGetSetup(Connection connection) @extern("xcb_get_setup");
 extern fn XScreenIterator* xcbRootsIterator(XCB_setup setup) @extern("xcb_setup_roots_iterator");
-extern fn Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
-extern fn Window xcbMapWindow(Connection con, Window win) @extern("xcb_map_window");
-extern fn Window xcbFlush(Connection con) @extern("xcb_flush");
+extern fn XCB_Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
+extern fn XCB_Window xcbMapWindow(Connection con, XCB_Window win) @extern("xcb_map_window");
+extern fn XCB_Window xcbFlush(Connection con) @extern("xcb_flush");
 extern fn KeyPressEvent* xcbPollEvent(Connection con) @extern("xcb_poll_for_event");
 extern fn KeyPressEvent* xcbPollQueuedEvent(Connection con) @extern("xcb_poll_for_queued_event");
 extern fn KeyPressEvent* xcbWaitForEvent(Connection con) @extern("xcb_wait_for_event");
-extern fn void xcbChangeProperty(Connection con, XcbProp mode, Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
-extern fn uint xcbQueryPointer(Connection con, Window window) @extern("xcb_query_pointer");
+extern fn void xcbChangeProperty(Connection con, XcbProp mode, XCB_Window window, uint, uint, uint format, uint size, char* name) @extern("xcb_change_property");
+extern fn uint xcbQueryPointer(Connection con, XCB_Window window) @extern("xcb_query_pointer");
 extern fn KeyPressEvent* xcbQueryPointerReply(Connection con, uint cookie, void* err) @extern("xcb_query_pointer_reply");
-extern fn uint xcbDestroy(Connection con, Window window) @extern("xcb_destroy_window");
+extern fn uint xcbDestroy(Connection con, XCB_Window window) @extern("xcb_destroy_window");
 extern fn uint xcbDisconnect(Connection con) @extern("xcb_disconnect");
 
 extern fn uint createWindow(
     Connection    c,
-    char              depth,
-    Window        window,
+    char          depth,
+    XCB_Window        window,
     uint              parent,
     short             x,
     short             y,
@@ -141,7 +144,7 @@ fn Window! new(Params params, String name) {
     XCB_setup setup = xcbGetSetup(connection);
     XScreenIterator* screen_iterator = xcbRootsIterator(setup);
 
-    Window window = xcbWindowId(connection);
+    XCB_Window window = xcbWindowId(connection);
 
     uint mask = XcbEventMask.BACK_PIXEL.value | XcbEventMask.CW_EVENT_MASK.value;
     uint[] event_masks = {screen_iterator.data.black_pixel,
@@ -170,18 +173,18 @@ fn Window! new(Params params, String name) {
     // Change window name
     // XCB_ATOM_WM_NAME, XCB_ATOM_STRING
     xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, 39, 31, 8, name.len, name);
-    Window response = Window {
-       .src = LinuxWindow {
+    Window response = {
+        .src = LinuxWindow {
             .window = window,
             .connection = connection,
             .display = dpy,
-       },
-       .width = screen_iterator.data.width_in_pixels,
-       .height = screen_iterator.data.height_in_pixels
+            .width = screen_iterator.data.width_in_pixels,
+            .height = screen_iterator.data.height_in_pixels
+        }
     };
 
     foreach (index, item: EventKey.values) {
-        response.event_map[index] = {
+        response.src.event_map[index] = {
            .key = item,
            .selected = false
         };
@@ -219,7 +222,7 @@ fn Event Window.getEvent(&self) {
         switch (type) {
             case KEY_RELEASED:
             case MOUSE_RELEASED: {
-                foreach (&item: self.event_map) {
+                foreach (&item: self.src.event_map) {
                     if (item.key == value) {
                         item.selected = false;
                         break;
@@ -228,7 +231,7 @@ fn Event Window.getEvent(&self) {
             }
             case KEY_PRESSED:
             case MOUSE_PRESSED: {
-                foreach (&item: self.event_map) {
+                foreach (&item: self.src.event_map) {
                     if (item.key == value) {
                         item.selected = true;
                         break;
@@ -250,7 +253,6 @@ fn void Window.free(self) {
    xcbDisconnect(self.src.connection);
 }
 
-
 enum EventType : uint (uint value)
 {
     EMPTY_EVENT = 0,
@@ -264,62 +266,4 @@ enum EventType : uint (uint value)
     QUIT = 32,
     DND = 33,
     DND_INIT = 34,
-}
-
-enum EventKey : uint (uint value)
-{
-    LEFT_MOUSE = 1,
-    MIDDLE_MOUSE = 2,
-    RIGHT_MOUSE = 3,
-    MOUSE_SCROLL_UP = 4,
-    MOUSE_SCROLL_DOWN = 5,
-    
-    EMPTY_KEY = 0,
-    ESCAPE = 9,
-    
-    A = 38,
-    B = 56,
-    C = 54,
-    D = 40,
-    E = 26,
-    F = 41,
-    G = 42,
-    H = 43,
-    I = 31,
-    J = 44,
-    K = 45,
-    L = 46,
-    M = 58,
-    N = 57,
-    O = 32,
-    P = 33,
-    Q = 24,
-    R = 27,
-    S = 39,
-    T = 28,
-    U = 30,
-    V = 55,
-    W = 25,
-    X = 53,
-    Y = 29,
-    Z = 52,
-
-    RETURN = 36,
-    DELETE = 119,   
-    NUMLOCK = 77,  
-    SLASH = 106,
-    MULTIPLY = 63,    
-    SUBTRACT = 82,  
-    NUM_0 = 87,
-    NUM_1 = 88,    
-    NUM_2 = 89, 
-    NUM_3 = 83,  
-    NUM_4 = 84,   
-    NUM_5 = 85,    
-    NUM_6 = 79, 
-    NUM_7 = 80,  
-    NUM_8 = 81,   
-    NUM_9 = 90,    
-    PERIOD = 91,    
-    KP_RETURN = 104
 }

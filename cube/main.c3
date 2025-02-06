@@ -146,22 +146,27 @@ fn void! main(String[] args)
     $switch(env::OS_TYPE)
         $case MACOS:
         $case LINUX: {
-            WaylandSurfaceCreateInfoKHR createInfo = {
-                vk::STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR, 
-                null, 
-                0, 
-                win.src.display,
-                win.src.surface,
-            };
-            vk::createWaylandSurfaceKHR(instance, &createInfo, null, &surface)!!;
-            // XcbSurfaceCreateInfoKHR createInfo = {
-            //     vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, 
-            //     null, 
-            //     0, 
-            //     win.src.connection,
-            //     win.src.window,
-            // };
-            // vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
+            $if $feature(WAYLAND):
+                WaylandSurfaceCreateInfoKHR createInfo = {
+                    vk::STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR, 
+                    null, 
+                    0, 
+                    win.src.display,
+                    win.src.surface,
+                };
+                vk::createWaylandSurfaceKHR(instance, &createInfo, null, &surface)!!;
+            $endif
+
+            $if $feature(X11):
+                XcbSurfaceCreateInfoKHR createInfo = {
+                    vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR, 
+                    null, 
+                    0, 
+                    win.src.connection,
+                    (vk::Window)win.src.window,
+                };
+                vk::createXcbSurfaceKHR(instance, &createInfo, null, &surface)!!;
+            $endif
         }
         $case WIN32: {
             Win32SurfaceCreateInfoKHR createInfo = {
@@ -528,22 +533,22 @@ fn void! main(String[] args)
     while (running) {
         c3w::Event event = win.getEvent();
 
-        if (win.is_pressed(LEFT_MOUSE)) {
-            Vec2f mouse_pos = win.getMousePos();
-            camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
-            uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-            prev_mouse = mouse_pos;
-        }
+        // if (win.is_pressed(LEFT_MOUSE)) {
+        //     Vec2f mouse_pos = win.getMousePos();
+        //     camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
+        //     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+        //     prev_mouse = mouse_pos;
+        // }
 
-        if (win.is_pressed(MOUSE_SCROLL_UP)) {
-            camera.zoom(5);
-             uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        }
+        // if (win.is_pressed(MOUSE_SCROLL_UP)) {
+        //     camera.zoom(5);
+        //      uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+        // }
 
-        if (win.is_pressed(MOUSE_SCROLL_DOWN)) {
-            camera.zoom(-5);
-            uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        }
+        // if (win.is_pressed(MOUSE_SCROLL_DOWN)) {
+        //     camera.zoom(-5);
+        //     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+        // }
 
         if (win.is_pressed(ESCAPE)) {
             running = false;
