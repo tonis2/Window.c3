@@ -531,27 +531,20 @@ fn void! main(String[] args)
 
     Vec2f prev_mouse;
     while (running) {
-        c3w::Event event = win.getEvent();
+        EventMap[] event_map = win.getEvent();
 
-        // if (win.is_pressed(LEFT_MOUSE)) {
-        //     Vec2f mouse_pos = win.getMousePos();
-        //     camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
-        //     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        //     prev_mouse = mouse_pos;
-        // }
-
-        // if (win.is_pressed(MOUSE_SCROLL_UP)) {
-        //     camera.zoom(5);
-        //      uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        // }
-
-        // if (win.is_pressed(MOUSE_SCROLL_DOWN)) {
-        //     camera.zoom(-5);
-        //     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
-        // }
-
-        if (win.is_pressed(ESCAPE)) {
-            running = false;
+        foreach (event: event_map) {
+            switch {
+                case event.is_pressed(LEFT_MOUSE): {
+                    Vec2f mouse_pos = win.getMousePos();
+                    camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
+                    uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
+                    prev_mouse = mouse_pos;
+                }
+                case event.is_pressed(ESCAPE): {
+                    running = false;
+                }
+            }
         }
 
         Fence frame_fence = frame_fences[frame];
