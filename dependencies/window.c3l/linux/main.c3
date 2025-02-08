@@ -52,5 +52,24 @@ enum EventKey : uint (uint value)
     LEFT_ARROW = 113,
     RIGHT_ARROW = 114,
     DOWN_ARROW = 116,
-    UP_ARROW = 111
+    UP_ARROW = 111,
+
+    LEFT_MOUSE = 272,
+    RIGHT_MOUSE = 273,
+    MIDDLE_MOUSE = 274,
+}
+
+enum EventType : uint (uint value)
+{
+    EMPTY_EVENT = 0,
+    KEY_PRESSED = 2,
+    KEY_RELEASED = 3,
+    MOUSE_PRESSED = 4,
+    MOUSE_RELEASED = 5,
+    MOUSE_MOTION = 6,
+    WINDOW_INIT = 12,
+    WINDOW_REFRESH = 16,
+    QUIT = 32,
+    DND = 33,
+    DND_INIT = 34,
 }

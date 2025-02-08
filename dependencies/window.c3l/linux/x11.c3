@@ -203,7 +203,7 @@ fn Vec2f Window.getMousePos(self) {
     return response;
 }
 
-fn Event Window.getEvent(&self) {
+fn EventMap[] Window.getEvent(&self) {
    KeyPressEvent* event = xcbPollEvent(self.src.connection);
    Event event_response;
    defer free(event);
@@ -212,13 +212,6 @@ fn Event Window.getEvent(&self) {
         EventType type = @enum_from_value(EventType, value, event.type)!!;
         EventKey value = @enum_from_value(EventKey, value, event.value)!!;
     
-        event_response = Event {
-            .type = type,
-            .value = value,
-            .mouse_x = event.event_x,
-            .mouse_y = event.event_y,
-        };
-
         switch (type) {
             case KEY_RELEASED:
             case MOUSE_RELEASED: {
@@ -244,7 +237,7 @@ fn Event Window.getEvent(&self) {
 
     }
 
-    return event_response;
+    return &self.src.event_map;
 }
 
 // Free and destroys window instance
@@ -253,17 +246,3 @@ fn void Window.free(self) {
    xcbDisconnect(self.src.connection);
 }
 
-enum EventType : uint (uint value)
-{
-    EMPTY_EVENT = 0,
-    KEY_PRESSED = 2,
-    KEY_RELEASED = 3,
-    MOUSE_PRESSED = 4,
-    MOUSE_RELEASED = 5,
-    MOUSE_MOTION = 6,
-    WINDOW_INIT = 12,
-    WINDOW_REFRESH = 16,
-    QUIT = 32,
-    DND = 33,
-    DND_INIT = 34,
-}

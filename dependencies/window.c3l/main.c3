@@ -10,13 +10,7 @@ struct Window {
     Win32Window src @if(env::WIN32);
 }
 
-fn bool Window.is_pressed(self, EventKey key) {
-    foreach (item: self.src.event_map) {
-        if (item.key == key) return item.selected;
-    }
-
-    return false;
-}
+fn bool EventMap.is_pressed(self, EventKey key) => self.key == key && self.selected == true;
 
 struct EventMap {
     EventKey key;
