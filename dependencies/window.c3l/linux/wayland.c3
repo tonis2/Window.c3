@@ -353,6 +353,8 @@ fn Window! new(Params params, String name) {
 
     return {
         .src = window,
+        .width = params.width,
+        .height = params.height,
     };
 }
 

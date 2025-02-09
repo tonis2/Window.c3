@@ -10,7 +10,6 @@ struct DarwinWindow {
     NSView view;
     CALayer layer;
     EventMap[EventKey.len] event_map;
-    Vec2f mouse_pos;
 }
 
 fn bool on_close(ObjcId self)
@@ -79,7 +78,9 @@ fn Window! new(Params params, String name) {
             .app = app,
             .view = view,
             .layer = layer
-        }
+        },
+        .width = params.width,
+        .height = params.height
     };
 
     foreach (index, item: EventKey.values) {
@@ -163,6 +164,7 @@ fn EventMap[] Window.getEvent(&self) {
 }
 
 fn void Window.free(&self) {
+    self.src.layer.release();
     self.src.window.release();
     self.src.app.terminate();
 }

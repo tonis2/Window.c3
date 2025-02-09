@@ -14,8 +14,8 @@ struct LinuxWindow {
     Connection connection;
     XCB_Window window;
     EventMap[EventKey.len] event_map;
-    uint width;
-    uint height;
+    uint display_width;
+    uint display_height;
 }
 
 extern fn Display openDisplay(char* name) @extern("XOpenDisplay");
@@ -178,9 +178,11 @@ fn Window! new(Params params, String name) {
             .window = window,
             .connection = connection,
             .display = dpy,
-            .width = screen_iterator.data.width_in_pixels,
-            .height = screen_iterator.data.height_in_pixels
-        }
+            .display_width = screen_iterator.data.width_in_pixels,
+            .display_height = screen_iterator.data.height_in_pixels
+        },
+        .width = params.width,
+        .height = params.height,
     };
 
     foreach (index, item: EventKey.values) {
@@ -199,7 +201,6 @@ fn Vec2f Window.getMousePos(self) {
     Vec2f response = {mouse_pos.root_x, mouse_pos.root_y};
     free(mouse_pos);
     free(err);
-
     return response;
 }
 
