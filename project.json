@@ -14,7 +14,7 @@
 			"type": "executable",
 			"sources": ["./cube/main.c3", "./cube/camera.c3"],
 			"dependencies": [],
-			"features": ["WAYLAND"]
+			"features": ["X11"]
 		},
 		"test": {
 			"type": "executable",
