@@ -92,7 +92,10 @@ fn Window! new(Params params, String name) {
     return response;
 }
 
-fn Vec2f Window.getMousePos(self) => self.src.mouse_pos;
+fn Vec2f Window.getMousePos(self) {
+   NSPoint point = self.src.window.get_mouse_pos();
+   return {(float)point.x, (float)point.y};
+}
 
 fn EventMap[] Window.getEvent(&self) {
     NSAutoreleasePool pool = NSObject.new("NSAutoreleasePool"); 
@@ -109,19 +112,25 @@ fn EventMap[] Window.getEvent(&self) {
     NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
     int type = event.get_type();
 
-    if (type != 0) {
-        NSPoint pos = event.locationInWindow();
-        self.src.mouse_pos = {(float)pos.x, (float)pos.y};
+    if (type != 0) {       
         EventType event_type = @enum_from_value(EventType, value, type)!!;
 
         switch (event_type) {
-            case LEFT_MOUSE_UP: 
-            case RIGHT_MOUSE_UP:
-            {
+            case LEFT_MOUSE_UP: {
+                self.src.event_map[EventKey.len - 3].selected = false;
                 break;
             }
-            case LEFT_MOUSE_DOWN:
+            case RIGHT_MOUSE_UP:
+            {
+                self.src.event_map[EventKey.len - 2].selected = false;
+                break;
+            }
+            case LEFT_MOUSE_DOWN: {
+                self.src.event_map[EventKey.len - 3].selected = true;
+                break;
+            }
             case RIGHT_MOUSE_DOWN: {
+                self.src.event_map[EventKey.len - 2].selected = true;
                 break;
             }
             case KEY_PRESSED: {

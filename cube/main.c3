@@ -535,7 +535,7 @@ fn void main(String[] args)
             switch {
                 case event.is_pressed(LEFT_MOUSE): {
                     Vec2f mouse_pos = win.getMousePos();
-                    camera.rotate(mouse_pos.x - prev_mouse.x, -(mouse_pos.y - prev_mouse.y));
+                    camera.rotate(mouse_pos.x - prev_mouse.x, (mouse_pos.y - prev_mouse.y));
                     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
                     prev_mouse = mouse_pos;
                 }
