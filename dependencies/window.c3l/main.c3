@@ -8,6 +8,8 @@ struct Window {
     DarwinWindow src @if(env::os_is_darwin());
 	LinuxWindow src @if(env::LINUX);
     Win32Window src @if(env::WIN32);
+    float width;
+    float height;
 }
 
 fn bool EventMap.is_pressed(self, EventKey key) => self.key == key && self.selected == true;
