@@ -1,7 +1,7 @@
 # Window.c3
 Window manager for [C3](https://c3-lang.org/)
 
-Basic window manager for vulkan.
+Basic window manager, currently meant to be used with vulkan.
 
 Currently supports
 * Windows (win32)
@@ -12,9 +12,10 @@ Currently supports
 Add `window.c3l` file to your C3 project dependencies folder, and then link it in `project.json` 
 with `"dependencies": ["c3w"]`
 
-Dependencies [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac)
 
-After installing dependencies run example with `c3c run cube`
+Running example:
+Install [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home)
+Then run example with `c3c run cube`
 
 ------
 ### Running with vulkan on macOS
