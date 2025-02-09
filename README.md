@@ -1,6 +1,12 @@
 # Window.c3
 Window manager for [C3](https://c3-lang.org/)
 
+Basic window manager for vulkan.
+
+Currently supports
+* Windows (win32)
+* MacOS (cocoa)
+* Linux (X11, Wayland)
 
 ### How to use
 Add `window.c3l` file to your C3 project dependencies folder, and then link it in `project.json` 
