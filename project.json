@@ -7,7 +7,7 @@
 	"dependencies": ["vk", "c3w"],
 	"script-dir": "./",
 	"sources": [],
-	"linked-libraries": ["dependencies/libvulkan.a"],
+	"linked-libraries": ["vulkan"],
 	"features": [],
 	"targets": {
 		"cube": {
