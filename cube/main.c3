@@ -75,7 +75,7 @@ ZStringList validations;
 ZStringList extensions;
 ZStringList device_extensions;
 
-fn void! main(String[] args)
+fn void main(String[] args)
 {
     c3w::Window win = c3w::new(
         params: {
@@ -94,7 +94,7 @@ fn void! main(String[] args)
     extensions.add_array({"VK_KHR_surface", "VK_EXT_debug_utils"});
 
     if (env::OS_TYPE == MACOS) {
-        extensions.add_array({"VK_MVK_macos_surface", "VK_KHR_portability_enumeration"});
+        extensions.add_array({"VK_EXT_metal_surface", "VK_KHR_portability_enumeration"});
         device_extensions.push("VK_KHR_portability_subset");
     }
 
@@ -106,7 +106,7 @@ fn void! main(String[] args)
         extensions.add_array({"VK_KHR_xcb_surface", "VK_KHR_wayland_surface"});
     }
 
-    vk::checkInstanceExtensionSupport(extensions)!;
+    vk::checkInstanceExtensionSupport(extensions)!!;
 
     InstanceCreateInfo instanceInfo = vk::instanceCreateInfo()
     .setApplicationInfo(&&ApplicationInfo{
@@ -147,14 +147,12 @@ fn void! main(String[] args)
         $case MACOS:
         $case LINUX: {
             $if $feature(WAYLAND):
-                WaylandSurfaceCreateInfoKHR createInfo = {
-                    vk::STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR, 
-                    null, 
-                    0, 
-                    win.src.display,
-                    win.src.surface,
+                MetalSurfaceCreateInfoEXT createInfo = {
+                    .sType = vk::STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,
+                    .pLayer = (CAMetalLayer*)win.src.layer.id
                 };
-                vk::createWaylandSurfaceKHR(instance, &createInfo, null, &surface)!!;
+
+                vk::createMetalSurfaceEXT(instance, &createInfo, null, &surface)!!;
             $endif
 
             $if $feature(X11):
@@ -251,9 +249,9 @@ fn void! main(String[] args)
 
     graphics_queue.handle = device.getQueue(graphics_queue.index);
 
-	SurfaceFormatList surface_formats = surface.getFormats(physical_device)!;
-	PresentModeList present_modes = surface.getPresentModes(physical_device)!;
-	SurfaceCapabilitiesKHR capabilities = surface.deviceSurfaceCapabilities(physical_device)!;
+	SurfaceFormatList surface_formats = surface.getFormats(physical_device)!!;
+	PresentModeList present_modes = surface.getPresentModes(physical_device)!!;
+	SurfaceCapabilitiesKHR capabilities = surface.deviceSurfaceCapabilities(physical_device)!!;
 
 	defer {
 		surface_formats.free();
@@ -279,8 +277,8 @@ fn void! main(String[] args)
       .setImageArrayLayers(1)
       .setImageExtent(extent);
 
-    swapchain = swapchain_info.build(device)!;
-    swapchain_images = swapchain.getImages(device, swapchain_info.minImageCount)!;
+    swapchain = swapchain_info.build(device)!!;
+    swapchain_images = swapchain.getImages(device, swapchain_info.minImageCount)!!;
 
     for (int i = 0; i < swapchain_info.minImageCount; ++i) {
         ImageView view = vk::imageViewCreateInfo()
@@ -300,14 +298,14 @@ fn void! main(String[] args)
             .levelCount = 1,
         })
         .setImage(swapchain_images[i])
-        .build(device)!;
+        .build(device)!!;
 
         swapchain_views.push(view);
     }
 
     //Create command pool
-    CommandPool command_pool = device.createCommandPool(queue: graphics_queue.index)!;
-    CommandBufferList command_buffers = device.createCommandBuffers(command_pool, swapchain_info.minImageCount)!;
+    CommandPool command_pool = device.createCommandPool(queue: graphics_queue.index)!!;
+    CommandBufferList command_buffers = device.createCommandBuffers(command_pool, swapchain_info.minImageCount)!!;
 
     // Create allocator of 50MB - DEVICE_ONLY memory
     vk::Allocation device_allocation = vk::Allocation {
@@ -316,7 +314,7 @@ fn void! main(String[] args)
         .properties = vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         .flags = vk::MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | vk::MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT,
         .size = 50_000_000
-    }.build()!;
+    }.build()!!;
 
     // Allocation where data can be changed from CPU
     vk::Allocation local_allocation = vk::Allocation {
@@ -325,7 +323,7 @@ fn void! main(String[] args)
         .properties = vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_CACHED_BIT,
         .flags = vk::MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT | vk::MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT,
         .size = 20_000_000
-    }.build()!;
+    }.build()!!;
 
  
     Memory vertex_buffer = vk::new_buffer(
@@ -363,7 +361,7 @@ fn void! main(String[] args)
                 .descriptorCount = 1,
                 .stageFlags = vk::SHADER_STAGE_VERTEX_BIT
             }
-        }).build(device)!;
+        }).build(device)!!;
 
     WriteDescriptorSet[] descriptorSets = {
             vk::writeDescriptorSet()
@@ -381,11 +379,11 @@ fn void! main(String[] args)
     ShaderModule shader_module = vk::shaderModuleCreateInfo()
     .setCodeSize(shader.len)
     .setCode((uint*)&shader[0])
-    .build(device)!;
+    .build(device)!!;
 
     defer shader_module.free(device);
 
-    PipelineLayout pipeline_layout = vk::pipelineLayoutCreateInfo().setSetLayouts({ descriptor_set_layout }).build(device)!;
+    PipelineLayout pipeline_layout = vk::pipelineLayoutCreateInfo().setSetLayouts({ descriptor_set_layout }).build(device)!!;
 
     SubpassDescription subpass = {
             .pipelineBindPoint = vk::PIPELINE_BIND_POINT_GRAPHICS,
@@ -410,7 +408,7 @@ fn void! main(String[] args)
         }
     })
     .setSubpasses({subpass})
-    .build(device)!;
+    .build(device)!!;
 
     // Create Renderpipeline info
     Pipeline pipeline = vk::graphicsPipelineCreateInfo()
@@ -501,7 +499,7 @@ fn void! main(String[] args)
                    .setViewports({{ .x = 0.0, .y = 0.0, .width = swapchain_info.imageExtent.width, .height = swapchain_info.imageExtent.height, .minDepth = 0.0, .maxDepth = 1.0 }})
                    .setScissors({{ .offset = { .x = 0, .y = 0 }, .extent = swapchain_info.imageExtent }}))
     .setRenderPass(render_pass)
-    .build(device)!;
+    .build(device)!!;
 
     FrameBufferList frame_buffers;
     
@@ -512,7 +510,7 @@ fn void! main(String[] args)
         .setHeight((uint)HEIGHT)
         .setLayers(1)
         .setAttachments({ swapchain });
-        frame_buffers.push(frame_buffer_info.build(device)!);
+        frame_buffers.push(frame_buffer_info.build(device)!!);
     }
 
     // Create syncronisation stuff
@@ -521,9 +519,9 @@ fn void! main(String[] args)
     FenceList frame_fences;
 
     for (uint i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        wait_semaphores.push(vk::semaphoreCreateInfo().build(device))!;
-        signal_semaphores.push(vk::semaphoreCreateInfo().build(device))!;
-        frame_fences.push(vk::fenceCreateInfo().setFlags(vk::FENCE_CREATE_SIGNALED_BIT).build(device))!;
+        wait_semaphores.push(vk::semaphoreCreateInfo().build(device))!!;
+        signal_semaphores.push(vk::semaphoreCreateInfo().build(device))!!;
+        frame_fences.push(vk::fenceCreateInfo().setFlags(vk::FENCE_CREATE_SIGNALED_BIT).build(device))!!;
     }
     
     bool running = true;
@@ -551,8 +549,8 @@ fn void! main(String[] args)
         Semaphore wait_semaphore = wait_semaphores[frame];
         Semaphore signal_semaphore = signal_semaphores[frame];
 
-        frame_fence.wait(device)!;
-        frame_fence.reset(device)!;
+        frame_fence.wait(device)!!;
+        frame_fence.reset(device)!!;
 
         uint next_image = swapchain.getNextImage(device, wait_semaphore);
 
@@ -570,8 +568,8 @@ fn void! main(String[] args)
         });
 
         CommandBuffer command_buffer = command_buffers[next_image];
-        vk::resetCommandBuffer(command_buffer, 0)!;
-        vk::beginCommandBuffer(command_buffer, &&vk::commandBufferBeginInfo())!;
+        vk::resetCommandBuffer(command_buffer, 0)!!;
+        vk::beginCommandBuffer(command_buffer, &&vk::commandBufferBeginInfo())!!;
 
         vk::cmdBeginRenderPass(command_buffer, &render_pass_info, vk::SUBPASS_CONTENTS_INLINE);
         vk::cmdSetViewport(command_buffer, 0, 1, &&vk::Viewport{.width = WIDTH, .height = HEIGHT, .minDepth = 0.0, .maxDepth = 1.0 });
@@ -591,15 +589,15 @@ fn void! main(String[] args)
         .setSignalSemaphores({ signal_semaphore })
         .setWaitDstStageMask({vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
 
-        vk::endCommandBuffer(command_buffer)!;
-        vk::queueSubmit(graphics_queue.handle, 1, &submit_info, frame_fence)!;
+        vk::endCommandBuffer(command_buffer)!!;
+        vk::queueSubmit(graphics_queue.handle, 1, &submit_info, frame_fence)!!;
 
         PresentInfoKHR present_info = vk::presentInfoKHR()
         .setWaitSemaphores({ signal_semaphore })
         .setSwapchains({ swapchain })
         .setImageIndices({ next_image });
 
-        vk::queuePresentKHR(graphics_queue.handle, &present_info)!;
+        vk::queuePresentKHR(graphics_queue.handle, &present_info)!!;
         frame = (frame + 1) % 2;
     }
 
