@@ -220,7 +220,7 @@ fn void pointerEnter(LinuxWindow* data, Pointer pointer, int serial, Surface sur
 fn void pointerLeave(LinuxWindow* data, Pointer pointer, int serial, Surface surface) {}
 
 fn void pointerMotion(LinuxWindow* data, Pointer pointer, uint time, int x, int y) {
-    mouse_pos = Vec2f{(float)fixed_to_double(x), (float)fixed_to_double(y)};
+    mouse_pos = Vec2f{(float)fixed_to_double(x), -(float)fixed_to_double(y)};
 }
 
 fn void pointerButton(LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state) {
