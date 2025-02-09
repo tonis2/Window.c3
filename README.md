@@ -12,10 +12,14 @@ Currently supports
 Add `window.c3l` file to your C3 project dependencies folder, and then link it in `project.json` 
 with `"dependencies": ["c3w"]`
 
+Dependencies [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac)
+
+After installing dependencies run example with `c3c run cube`
+
 ------
 ### Running with vulkan on macOS
 
-Install VulkanSDK and add vulkan lib file path as `rpath` to the run command.
+Install [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac) and add vulkan lib file path as `rpath` to the run command.
 Its the folder with `vulkan.1.dylib` file
 ````
 c3c run cube -z -rpath -z /Users/my_user/VulkanSDK/macOS/lib
@@ -23,7 +27,9 @@ c3c run cube -z -rpath -z /Users/my_user/VulkanSDK/macOS/lib
 
 ------
 ### Running vulkan on linux
-Choosing wayland or X11 can be done with feature tag to c3
+Install [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac)
+
+Choosing wayland or X11 can be done with feature tag inside C3 `project.json`
 ```
 "features": ["WAYLAND"]
 "features": ["X11"]
