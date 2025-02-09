@@ -144,15 +144,24 @@ fn void main(String[] args)
 
     // Create surface
     $switch(env::OS_TYPE)
-        $case MACOS:
+        $case MACOS: {
+            MetalSurfaceCreateInfoEXT createInfo = {
+                .sType = vk::STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,
+                .pLayer = (CAMetalLayer*)win.src.layer.id
+            };
+
+            vk::createMetalSurfaceEXT(instance, &createInfo, null, &surface)!!;
+        }
         $case LINUX: {
             $if $feature(WAYLAND):
-                MetalSurfaceCreateInfoEXT createInfo = {
-                    .sType = vk::STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,
-                    .pLayer = (CAMetalLayer*)win.src.layer.id
+                WaylandSurfaceCreateInfoKHR createInfo = {
+                    vk::STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR, 
+                    null, 
+                    0, 
+                    win.src.display,
+                    win.src.surface,
                 };
-
-                vk::createMetalSurfaceEXT(instance, &createInfo, null, &surface)!!;
+                vk::createWaylandSurfaceKHR(instance, &createInfo, null, &surface)!!;
             $endif
 
             $if $feature(X11):
