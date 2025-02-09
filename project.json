@@ -7,17 +7,19 @@
 	"dependencies": ["vk", "c3w"],
 	"script-dir": "./",
 	"sources": [],
-	"linked-libraries": [],
+	"linked-libraries": ["dependencies/libvulkan.a"],
 	"features": [],
 	"targets": {
 		"cube": {
 			"type": "executable",
-			"sources-add": ["./cube/main.c3", "./cube/camera.c3"],
-			"dependencies": []
+			"sources": ["./cube/main.c3", "./cube/camera.c3"],
+			"dependencies": [],
+			"features": ["WAYLAND"]
 		},
 		"test": {
 			"type": "executable",
-			"sources-add": ["./test/main.c3"],
+			"sources": ["./test/main.c3"],
+			"features": ["WAYLAND"],
 			"dependencies": []
 		},
 		"zip": {
