@@ -12,9 +12,9 @@ Currently supports
 Add `window.c3l` file to your C3 project dependencies folder, and then link it in `project.json` 
 with `"dependencies": ["c3w"]`
 
-Dependencies [C3](https://c3-lang.org/)
 
-After installing dependencies run example with `c3c run cube`
+Running example install [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home)
+Then run example with `c3c run cube`
 
 ------
 ### Running with vulkan on macOS
