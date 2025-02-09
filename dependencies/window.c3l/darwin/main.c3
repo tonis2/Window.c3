@@ -10,6 +10,7 @@ struct DarwinWindow {
     NSView view;
     CALayer layer;
     EventMap[EventKey.len] event_map;
+    Vec2f mouse_pos;
 }
 
 fn bool on_close(ObjcId self)
@@ -82,7 +83,7 @@ fn Window! new(Params params, String name) {
     };
 
     foreach (index, item: EventKey.values) {
-        response.event_map[index] = {
+        response.src.event_map[index] = {
             .key = item,
             .selected = false
         };
@@ -91,10 +92,9 @@ fn Window! new(Params params, String name) {
     return response;
 }
 
+fn Vec2f Window.getMousePos(self) => self.src.mouse_pos;
 
-fn Event Window.getEvent(&self) {
-    Event event_response;
-
+fn EventMap[] Window.getEvent(&self) {
     NSAutoreleasePool pool = NSObject.new("NSAutoreleasePool"); 
     pool.alloc();
     pool.init();
@@ -111,15 +111,10 @@ fn Event Window.getEvent(&self) {
 
     if (type != 0) {
         NSPoint pos = event.locationInWindow();
-        // EventKey value = ;
-        event_response = Event {
-            .type = @enum_from_value(EventType, value, type)!!,
-            // .value = value,
-            .mouse_x = (float)pos.x,
-            .mouse_y = (float)pos.y,
-        };
+        self.src.mouse_pos = {(float)pos.x, (float)pos.y};
+        EventType event_type = @enum_from_value(EventType, value, type)!!;
 
-        switch (event_response.type) {
+        switch (event_type) {
             case LEFT_MOUSE_UP: 
             case RIGHT_MOUSE_UP:
             {
@@ -131,9 +126,9 @@ fn Event Window.getEvent(&self) {
             }
             case KEY_PRESSED: {
                 int key = event.get_key();
-                event_response.value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
-                foreach (&item: self.event_map) {
-                    if (item.key == event_response.value) {
+                EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
+                foreach (&item: self.src.event_map) {
+                    if (item.key == event_value) {
                         item.selected = true;
                         break;
                     };
@@ -141,9 +136,9 @@ fn Event Window.getEvent(&self) {
             }
             case KEY_RELEASED: {
                 int key = event.get_key();
-                event_response.value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
-                foreach (&item: self.event_map) {
-                    if (item.key == event_response.value) {
+                EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
+                foreach (&item: self.src.event_map) {
+                    if (item.key == event_value) {
                         item.selected = false;
                         break;
                     };
@@ -155,7 +150,7 @@ fn Event Window.getEvent(&self) {
 
     self.src.window.sendEvent(event);
     self.src.app.updateWindows();
-    return event_response;
+    return &self.src.event_map;
 }
 
 fn void Window.free(&self) {
@@ -280,5 +275,9 @@ enum EventKey : uint (uint value)
     LEFT_ARROW = 123,
     RIGHT_ARROW = 124,
     DOWN_ARROW = 125,
-    UP_ARROW = 126
+    UP_ARROW = 126,
+
+    LEFT_MOUSE = 272,
+    RIGHT_MOUSE = 273,
+    MIDDLE_MOUSE = 274,
 }
