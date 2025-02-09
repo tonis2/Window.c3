@@ -2,7 +2,7 @@
   "provides" : "c3w",
   "targets" : {
     "macos-x64" : {
-      "linked-libraries" : ["CoreFoundation.framework", "Cocoa.framework"],
+      "linked-libraries" : ["CoreFoundation.framework", "Cocoa.framework", "Metal.framework", "Foundation.framework", "AppKit.framework", "CoreGraphics.framework"],
       "sources": ["darwin/main.c3", "darwin/objc.c3", "main.c3"]
     },
     "linux-x64" : {
