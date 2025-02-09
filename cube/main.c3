@@ -103,7 +103,13 @@ fn void main(String[] args)
     }
 
     if (env::OS_TYPE == LINUX) {
-        extensions.add_array({"VK_KHR_xcb_surface", "VK_KHR_wayland_surface"});
+        $if $feature(WAYLAND):
+            extensions.add_array({"VK_KHR_wayland_surface"});
+        $endif
+
+        $if $feature(X11):
+            extensions.add_array({"VK_KHR_xcb_surface"});
+        $endif
     }
 
     vk::checkInstanceExtensionSupport(extensions)!!;
@@ -135,7 +141,10 @@ fn void main(String[] args)
       instanceInfo.ppEnabledLayerNames = (char*)validations.entries;
     }
 
-    vk::createInstance(&instanceInfo, null, &instance)!!;
+    if (catch err = vk::createInstance(&instanceInfo, null, &instance)) {
+        io::printfn("Extension error");
+        return;
+    }
     vk::loadExtensions(instance);
 
     if (ENABLE_VALIDATION_LAYERS) {
