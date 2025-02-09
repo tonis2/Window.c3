@@ -13,8 +13,8 @@ Add `window.c3l` file to your C3 project dependencies folder, and then link it i
 with `"dependencies": ["c3w"]`
 
 
-Running example install [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home)
-
+Running example:
+Install [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home)
 Then run example with `c3c run cube`
 
 ------
