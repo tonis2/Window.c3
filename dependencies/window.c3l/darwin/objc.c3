@@ -250,6 +250,10 @@ fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId,
 <* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
 
+<* @require self.id `NSWindow is not initialized` *>
+fn NSPoint NSWindow.get_mouse_pos(&self) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
+
+
 fn NSView NSWindow.get_view(&self) {
     return NSObject {
         .cls = objc::getClass("NSView"),
