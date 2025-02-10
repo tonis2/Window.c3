@@ -54,9 +54,12 @@ enum EventKey : uint (uint value)
     DOWN_ARROW = 116,
     UP_ARROW = 111,
 
-    LEFT_MOUSE = 272,
-    RIGHT_MOUSE = 273,
-    MIDDLE_MOUSE = 274,
+    MOUSE_SCROLL_UP = 4,
+    MOUSE_SCROLL_DOWN = 5,
+
+    LEFT_MOUSE = 1,
+    RIGHT_MOUSE = 3,
+    MIDDLE_MOUSE = 2,
 }
 
 enum EventType : uint (uint value)
