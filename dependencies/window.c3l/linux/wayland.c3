@@ -224,15 +224,18 @@ fn void pointerMotion(LinuxWindow* data, Pointer pointer, uint time, int x, int 
 }
 
 fn void pointerButton(LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state) {
-    if (button == EventKey.LEFT_MOUSE.value) {
+    //Left mouse button
+    if (button == 272) {
         event_map[EventKey.len - 3].selected = (bool)state;
     }
 
-    if (button == EventKey.RIGHT_MOUSE.value) {
+    //Right mouse button
+    if (button == 273) {
         event_map[EventKey.len - 2].selected  = (bool)state;
     }
-
-    if (button == EventKey.MIDDLE_MOUSE.value) {
+    
+    //Middle mouse button
+    if (button == 274) {
         event_map[EventKey.len - 1].selected  = (bool)state;
     }
 }
