@@ -20,7 +20,12 @@ def PointerEnter = fn void (LinuxWindow* data, Pointer pointer, int serial, Surf
 def PointerLeave = fn void (LinuxWindow* data, Pointer pointer, int serial, Surface surface);
 def PointerMotion = fn void (LinuxWindow* data, Pointer pointer, uint time, int x, int y);
 def PointerButton = fn void (LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state);
-def PointerAxis = fn void (LinuxWindow* data, Pointer pointer, uint time, uint axis, uint value);
+def PointerAxis = fn void (LinuxWindow* data, Pointer pointer, uint time, uint axis, int value);
+def PointerFrame = fn void (LinuxWindow* data, Pointer pointer);
+def PointerAxisSrc = fn void (LinuxWindow* data, Pointer pointer, uint source);
+def PointerAxisStop = fn void (LinuxWindow* data, Pointer pointer, uint axis);
+def PointerAxisValue = fn void (LinuxWindow* data, Pointer pointer, uint axis, int value);
+
 def Noop = fn void ();
 
 def Registry = void*;
@@ -90,11 +95,12 @@ struct PointerListener {
     PointerMotion motion;
     PointerButton button;
     PointerAxis axis;
-    Noop frame;
-    Noop axis_source;
-    Noop axis_stop;
-    Noop axis_disc;
-    Noop axis_value;
+    void* frame;
+    void* axis_source;
+    void* axis_stop;
+    void* axis_disc;
+    void* axis_value;
+    void* random;
 }
 
 struct MouseParams {
@@ -151,7 +157,7 @@ enum SeatCapability: uint (uint value) {
 
 fn void removeRegistry(LinuxWindow* window, Registry registry, uint name)
 {
-    window.open = false;             
+    // window.open = false;             
 }
 
 fn void shellPing(LinuxWindow* window, Shell shell, uint serial)
@@ -169,7 +175,7 @@ fn void shellSurfaceConfigure(LinuxWindow* window, XDG_surface surface, uint ser
 fn void topSurfaceClose(LinuxWindow* data, XDG_top_level top_level)
 {   
     // Window closed
-    data.open = false;
+    // data.open = false;
 }
 
 fn void topSurfaceConfigure(LinuxWindow* data, XDG_top_level top_level, int width, int height, void* states) {}
@@ -199,9 +205,11 @@ fn void seatName(LinuxWindow* data, Seat seat, char* name)
 fn void kbMap(LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz) {}
 fn void kbEnter(LinuxWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys) {}
 fn void kbLeave(LinuxWindow* data, Keyboard kb, uint ser, Surface surface) {}
-fn void noop() {}
+fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, void* data5) {
 
-fn void kbKey(LinuxWindow* data, Keyboard kb, uint serial, uint type, uint key, uint state)
+}
+
+fn void kbKey(LinuxWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
     EventKey keyboard_key = @enum_from_value(EventKey, value, key + 8)!!;
 
@@ -240,7 +248,14 @@ fn void pointerButton(LinuxWindow* data, Pointer pointer, int serial, uint time,
     }
 }
 
-fn void pointerAxis(LinuxWindow* data, Pointer pointer, uint time, uint axis, uint value) {}
+fn void pointerAxis(LinuxWindow* data, Pointer pointer, uint time, uint axis, int value) {
+    // Mouse scroll event
+    if (value > 0) {
+        event_map[EventKey.len - 5].selected  = true;
+    } else {
+        event_map[EventKey.len - 4].selected  = true;
+    }
+}
 
 
 fn void handleRegistry(LinuxWindow* window, Registry registry, uint name, char* interface_name, uint version)
@@ -307,6 +322,7 @@ PointerListener pointerListener = {
     &noop,
     &noop,
     &noop,
+    &noop,
     &noop
 };
 
@@ -338,11 +354,16 @@ fn Window! new(Params params, String name) {
     proxy_add_listener(window.top_level, &topSurfaceListener, &window);
     assert(window.top_level);
     // set maximized
-    // proxy_marshal_flags(top_level, 9, &xdg_toplevel_interface, proxy_get_version(top_level), 0, null);
+    // proxy_marshal_flags(window.top_level, 9, &xdg_toplevel_interface, proxy_get_version(top_level), 0, null);
     // Set title
     proxy_marshal_flags(window.top_level, 1, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, name);
-    // // Set id
+    // Set id
     proxy_marshal_flags(window.top_level, 2, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, name);
+    // Set min size
+    proxy_marshal_flags(window.top_level, 8, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, params.width, params.height);
+    // Set max size
+    proxy_marshal_flags(window.top_level, 7, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, params.width, params.height);
+
     surface_commit(window.surface);
     rountrip(display);
     surface_commit(window.surface);
@@ -366,7 +387,11 @@ fn Vec2f Window.getMousePos(self) {
 }
 
 fn EventMap[] Window.getEvent(&self) {
+    // Reset mouse scroll
+    event_map[EventKey.len - 4].selected  = false;
+    event_map[EventKey.len - 5].selected  = false;
     dispatch(self.src.display);
+
     return &event_map;
 }
 

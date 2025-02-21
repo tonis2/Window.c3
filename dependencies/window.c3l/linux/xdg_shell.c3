@@ -138,14 +138,9 @@ Interface xdg_positioner_interface = {
         { "set_constraint_adjustment", "u", null },
         { "set_offset", "ii", null },
         { "set_reactive", "", null },
-        { "set_parent_size", "", null },
+        { "set_parent_size", "ii", null },
         { "set_parent_configure", "u", null },
     },
-    .event_count = 4,
-    .events = &&Message[*]{
-        { "configure", "iia", null },
-        { "close", "", null },
-        { "configure_bounds", "ii", null },
-        { "wm_capabilities", "a", null },
-    },
+    .event_count = 0,
+    .events = null
 };

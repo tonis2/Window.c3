@@ -557,6 +557,14 @@ fn void main(String[] args)
                     uniform_buffer.upload(&&camera.matrix(), uniform_buffer.size);
                     prev_mouse = mouse_pos;
                 }
+                case event.is_pressed(MOUSE_SCROLL_DOWN): {
+                    camera.zoom(5);
+                    uniform_buffer.upload(&&camera.matrix(), size: uniform_buffer.size);
+                }
+                case event.is_pressed(MOUSE_SCROLL_UP): {
+                    camera.zoom(-5);
+                    uniform_buffer.upload(&&camera.matrix(), size: uniform_buffer.size);
+                }
                 case event.is_pressed(ESCAPE): {
                     running = false;
                 }
