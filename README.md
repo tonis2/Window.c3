@@ -4,7 +4,7 @@ Window manager for [C3](https://c3-lang.org/)
 Basic window manager, currently meant to be used with vulkan.
 
 Currently supports
-* Windows (win32) (almost)
+* Windows (win32) (todo)
 * MacOS (cocoa)
 * Linux (X11, Wayland)
 
