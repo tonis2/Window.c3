@@ -22,32 +22,36 @@ fn bool on_close(ObjcId self)
 fn NSSize resize_window(ObjcId self, NSSize frame)
 {
     if (catch self.get_ivar("NSWindow")) return frame;
-	io::printfn("window resized to %f %f", frame.width, frame.height);
+	io::printfn("window sresized to %f %f", frame.width, frame.height);
     return frame;
 }
 
 fn Window! new(Params params, String name) {
-    NSObject object = NSObject.new("NSObject"); 
+    NSObject object = new_object("NSObject"); 
     object.add_method("windowShouldClose:", &on_close)!!;
 
     NSApplication app = NSApplication { .cls = objc::getClass("NSApplication") };
     app.sharedApplication();
     app.setActivationPolicy(ApplicationActivationPolicy.REGULAR);
 
-    NSWindow win = NSObject.new("NSWindow");
+    NSWindow win = new_object("NSWindow");
     win.alloc();
 
     ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val | WindowStyleMask.TITLED.val | WindowStyleMask.RESIZABLE.val;
     win.initWithContentRect(NSRect {{params.x, params.y}, {params.width, params.height}}, window_style, window_style, false);
    
-    NSString window_title = NSObject.new("NSString");
+    NSString window_title = new_object("NSString");
     window_title.stringWithUTF8String((ZString)name);
     win.setTitle(window_title);
 
-    NSObject delegate = NSObject.new("NSObject");
+    NSObject delegate = new_object("NSObject");
     delegate.alloc_class_pair("WindowDelegate", 0);
     delegate.add_ivar("NSWindow", $sizeof(win), math::log2($sizeof(win)), "L")!!;
     delegate.add_method("windowWillResize:toSize:", &resize_window, "{NSSize=ff}@:{NSSize=ff}")!!;
+    // delegate.add_method("windowDidMiniaturize::", &resize_window, "")!!;
+    // delegate.add_method("windowDidDeminiaturize::", &resize_window, "")!!;
+    
+
     delegate.alloc();
     delegate.init();
     delegate.setInstanceVariable("NSWindow", win);
@@ -64,7 +68,7 @@ fn Window! new(Params params, String name) {
     // view.alloc();
     // view.init();
 
-    CALayer layer = NSObject.new("CAMetalLayer");
+    CALayer layer = new_object("CAMetalLayer");
     layer.alloc();
     layer.init();
 
@@ -99,12 +103,12 @@ fn Vec2f Window.getMousePos(self) {
 }
 
 fn EventMap[] Window.getEvent(&self) {
-    NSAutoreleasePool pool = NSObject.new("NSAutoreleasePool"); 
+    NSAutoreleasePool pool = new_object("NSAutoreleasePool"); 
     pool.alloc();
     pool.init();
     defer pool.release();
 
-    NSString loop = NSObject.new("NSString");
+    NSString loop = new_object("NSString");
     loop.stringWithUTF8String("kCFRunLoopDefaultMode");
 
     NSDate until; 
@@ -113,10 +117,22 @@ fn EventMap[] Window.getEvent(&self) {
     NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
     int type = event.get_type();
 
-    if (type != 0) {       
-        EventType event_type = @enum_from_value(EventType, value, type)!!;
+    self.src.event_map[EventKey.len - 4].selected = false;
+    self.src.event_map[EventKey.len - 5].selected = false;
 
+    if (type != 0) {
+        EventType event_type = @enum_from_value(EventType, value, type)!!;
         switch (event_type) {
+            case SCROLL_WHEEL: {
+                double delta = event.get_delta();
+                if (delta > 0) {
+                    self.src.event_map[EventKey.len - 4].selected = true;
+                }
+                else {
+                    self.src.event_map[EventKey.len - 5].selected = true;
+                }
+                break;
+            }
             case LEFT_MOUSE_UP: {
                 self.src.event_map[EventKey.len - 3].selected = false;
                 break;
@@ -287,6 +303,9 @@ enum EventKey : uint (uint value)
     RIGHT_ARROW = 124,
     DOWN_ARROW = 125,
     UP_ARROW = 126,
+
+    MOUSE_SCROLL_DOWN = 270,
+    MOUSE_SCROLL_UP = 271,
 
     LEFT_MOUSE = 272,
     RIGHT_MOUSE = 273,
