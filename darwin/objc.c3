@@ -47,14 +47,13 @@ alias NSView = NSObject;
 typedef NSEvent = void*;
 typedef NSStatusBarItem = void*;
 
-fn NSObject NSObject.new(ZString cls_name = "NSObject") @operator(construct)
+fn NSObject new_object(ZString cls_name = "NSObject")
 {
     NSObject self;
     self.cls = objc::getClass(cls_name);
     return self;
 }
 
-<* @require self.id `self is not initialized` *>
 macro NSObject.call(&self, $FunctionType, ZString $selector, ...)
 {
 	return (($FunctionType)&objc::msgSend)((ObjcId)self.id, objc::sel_getUid($selector), $vasplat);
@@ -75,76 +74,62 @@ fn void NSApplication.sharedApplication(&self)
     self.id = objc::msg_send(self.cls, SendVoid, "sharedApplication"); 
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.setDelegate(&self, NSObject delegate)
 {
     objc::msg_send(self.id, SendId, "setDelegate:", delegate.id);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSWindow.setTitle(&self, NSString title)
 {
     objc::msg_send(self.id, SendId, "setTitle:", title.id);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.terminate(&self)
 {
     objc::msg_send(self.id, SendId, "terminate:", self.id);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.activateIgnoringOtherApps(&self, bool flag)
 {
     objc::msg_send(self.id, SendBool, "activateIgnoringOtherApps:", flag);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn NSEvent NSApplication.nextEventMatchingMask(&self, long mask, NSDate until_date, NSObject in_mode, bool dequeue)
 {
     return (NSEvent)objc::msg_send(self.id, SendDequeueEvent, "nextEventMatchingMask:untilDate:inMode:dequeue:", mask, until_date.id, in_mode.id, dequeue);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.finishLaunching(&self)
 {
     objc::msg_send(self.id, SendVoid, "finishLaunching");
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.updateWindows(&self)
 {
     objc::msg_send(self.id, SendVoid, "updateWindows");
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.sendEvent(&self, NSEvent event)
 {
     objc::msg_send(self.id, SendEvent, "sendEvent:", event);
 }
 
-<* @require self.id `NSApplication is not initialized` *>
 fn void NSApplication.setActivationPolicy(&self, ApplicationActivationPolicy policy)
 { 
     objc::msg_send(self.id, SendInt, "setActivationPolicy:", policy.val);
 }
 
-<* 
-    @require self.id `NSImage is not allocated` 
-    @require str.id `NSString is not initialized` 
-*>
 fn void NSImage.initWithContentsOfFile(&self, NSString str)
 {
     self.id = objc::msg_send(self.id, SendId, "initWithContentsOfFile:", str.id);
 }
 
-<* @require self.id `NSImage is not initialized` *>
 fn void NSImage.setSize(&self, NSSize size)
 {
     objc::msg_send(self.id, SendSize, "setSize:", size);
 }
 
-<* @require self.id `NSObject is not allocated` *>
+
 fn void NSObject.init(&self)
 {
     self.id = objc::msg_send(self.id, SendVoid, "init");
@@ -170,31 +155,28 @@ fn void NSDate.distantPast(&self)
     self.id = objc::msg_send(self.cls, SendVoid, "distantPast");
 }
 
-<* @require self.id `NSWindow is not initialized` *>
+
 fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_aliaser)
 {
     self.id = objc::msg_send(self.id, SendContentRec, "initWithContentRect:styleMask:backing:aliaser:", rect, style_mask, backing, is_aliaser);
 }
 
-<* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.makeKeyAndOrderFront(&self, ObjcSelector sel)
 {
     objc::msg_send(self.id, SendSelector, "makeKeyAndOrderFront:", sel);
 }
 
-<* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.setIsVisible(&self, bool flag)
 {
     objc::msg_send(self.id, SendBool, "setIsVisible:", flag);
 }
-
 
 fn void NSObject.alloc(&self)
 {
     self.id = objc::msg_send(self.cls, SendVoid, "alloc");
 }
 
-<* @require self.id `NSObject is not allocated` *>
+
 fn void NSObject.release(&self)
 {
     objc::msg_send(self.id, SendVoid, "release");
@@ -226,7 +208,6 @@ macro ObjcIvar? ObjcId.get_ivar(ObjcId self, ZString name)
     return out;
 }
 
-<* @require self.id `NSObject is not initialized` *>
 macro void NSObject.setInstanceVariable(NSObject self, ZString name, NSObject out)
 {
     objc::setInstanceVariable(self.id, name, out.id);
@@ -235,6 +216,9 @@ macro void NSObject.setInstanceVariable(NSObject self, ZString name, NSObject ou
 fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
 fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
 fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
+fn int NSEvent.get_scroll(self) => objc::msg_send(self, GetInt, "scrollingDeltaY");
+fn double NSEvent.get_delta(self) => objc::msg_send(self, GetDouble, "deltaY");
+
 fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 // fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
@@ -242,10 +226,7 @@ fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifier
 fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);
 fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId, "setLayer:", layer.id);
 
-<* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
-
-<* @require self.id `NSWindow is not initialized` *>
 fn NSPoint NSWindow.get_mouse_pos(&self) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
 
 fn NSView NSWindow.get_view(&self) {
