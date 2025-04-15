@@ -122,14 +122,6 @@ struct KeyPressEvent {
     char same_screen;
 }
 
-struct MouseParams {
-    char type;
-    ushort x;
-    ushort y;
-    ushort root_x;
-    ushort root_y;
-}
-
 // Creates new XCB window
 fn Window? new(Params params, String name) {
     Display dpy = openDisplay(null);
