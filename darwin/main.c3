@@ -26,11 +26,11 @@ fn NSSize resize_window(ObjcId self, NSSize frame)
     return frame;
 }
 
-fn Window! new(Params params, String name) {
+fn Window? new(Params params, String name) {
     NSObject object = NSObject.new("NSObject"); 
     object.add_method("windowShouldClose:", &on_close)!!;
 
-    NSApplication app = NSApplication { .cls = objc::getClass("NSApplication") };
+    NSApplication app = { .cls = objc::getClass("NSApplication") };
     app.sharedApplication();
     app.setActivationPolicy(ApplicationActivationPolicy.REGULAR);
 
@@ -72,7 +72,7 @@ fn Window! new(Params params, String name) {
     view.wants_Layer(true);
     win.set_view(view);
   
-    Window response = Window {
+    Window response = {
         .src = {
             .window = win,
             .app = app,

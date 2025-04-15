@@ -3,11 +3,11 @@ import std::math;
 import std::os::win32;
 import std::io;
 
-def HWND = void*;
-def Hinstance = void*;
+alias HWND = void*;
+alias Hinstance = void*;
 
 struct Win32Window {
-    HWND window;
+    void* window;
     Hinstance instance;
     Win32_HDC hdc;
     EventMap[EventKey.len] event_map;

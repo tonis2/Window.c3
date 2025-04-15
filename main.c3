@@ -4,6 +4,8 @@ module c3w;
 import std;
 import std::os::win32;
 
+alias Vec2f = float[<2>];
+
 struct Window {
     DarwinWindow src @if(env::os_is_darwin());
 	LinuxWindow src @if(env::LINUX);
@@ -34,6 +36,4 @@ struct Params {
     int height;
 }
 
-fault WindowError {
-    FAILED_OPENING_WINDOW
-}
+faultdef FAILED_OPENING_WINDOW;

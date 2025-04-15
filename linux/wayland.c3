@@ -3,41 +3,42 @@ import std::math;
 import std::io;
 import std::core::types;
 
-def GlobalEvent = fn void (LinuxWindow* data, void* wl_registry, uint name, char* iface, uint ver);
-def RemoveEvent = fn void (LinuxWindow* data, void* wl_registry, uint name);
-def ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
-def SeatCapabilitiesEvent = fn void (LinuxWindow* data, void* wl_registry, uint capabilities);
-def SeatNameEvent = fn void (LinuxWindow* data, void* wl_registry, char* name);
 
-def KBmapEvent = fn void (LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz);
-def KBenterEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys);
-def KBleaveEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface);
-def KBkeyEvent = fn void (LinuxWindow* data, Keyboard kb,uint serial, uint type, uint key, uint state);
-def KBmodEvent = fn void (LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group);
-def KBrepEvent = fn void (LinuxWindow* data, Keyboard kb, int rate, int del);
+alias GlobalEvent = fn void (LinuxWindow* data, void* wl_registry, uint name, char* iface, uint ver);
+alias RemoveEvent = fn void (LinuxWindow* data, void* wl_registry, uint name);
+alias ShellPing = fn void (LinuxWindow* data, Shell shell, uint serial);
+alias SeatCapabilitiesEvent = fn void (LinuxWindow* data, void* wl_registry, uint capabilities);
+alias SeatNameEvent = fn void (LinuxWindow* data, void* wl_registry, char* name);
 
-def PointerEnter = fn void (LinuxWindow* data, Pointer pointer, int serial, Surface surface, int x, int y);
-def PointerLeave = fn void (LinuxWindow* data, Pointer pointer, int serial, Surface surface);
-def PointerMotion = fn void (LinuxWindow* data, Pointer pointer, uint time, int x, int y);
-def PointerButton = fn void (LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state);
-def PointerAxis = fn void (LinuxWindow* data, Pointer pointer, uint time, uint axis, int value);
-def PointerFrame = fn void (LinuxWindow* data, Pointer pointer);
-def PointerAxisSrc = fn void (LinuxWindow* data, Pointer pointer, uint source);
-def PointerAxisStop = fn void (LinuxWindow* data, Pointer pointer, uint axis);
-def PointerAxisValue = fn void (LinuxWindow* data, Pointer pointer, uint axis, int value);
+alias KBmapEvent = fn void (LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz);
+alias KBenterEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys);
+alias KBleaveEvent = fn void (LinuxWindow* data, Keyboard kb, uint ser, Surface surface);
+alias KBkeyEvent = fn void (LinuxWindow* data, Keyboard kb,uint serial, uint type, uint key, uint state);
+alias KBmodEvent = fn void (LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group);
+alias KBrepEvent = fn void (LinuxWindow* data, Keyboard kb, int rate, int del);
 
-def Noop = fn void ();
+alias PointerEnter = fn void (LinuxWindow* data, Pointer pointer, int serial, Surface surface, int x, int y);
+alias PointerLeave = fn void (LinuxWindow* data, Pointer pointer, int serial, Surface surface);
+alias PointerMotion = fn void (LinuxWindow* data, Pointer pointer, uint time, int x, int y);
+alias PointerButton = fn void (LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state);
+alias PointerAxis = fn void (LinuxWindow* data, Pointer pointer, uint time, uint axis, int value);
+alias PointerFrame = fn void (LinuxWindow* data, Pointer pointer);
+alias PointerAxisSrc = fn void (LinuxWindow* data, Pointer pointer, uint source);
+alias PointerAxisStop = fn void (LinuxWindow* data, Pointer pointer, uint axis);
+alias PointerAxisValue = fn void (LinuxWindow* data, Pointer pointer, uint axis, int value);
 
-def Registry = void*;
-def Proxy = void*;
-def Compositor = void*;
-def Shell = void*;
-def Surface = void*;
-def SubCompositor = void*;
-def Display = void*;
-def Seat = void*;
-def Keyboard = void*;
-def Pointer = void*;
+alias Noop = fn void ();
+
+alias Registry = void*;
+alias Proxy = void*;
+alias Compositor = void*;
+alias Shell = void*;
+alias Surface = void*;
+alias SubCompositor = void*;
+alias Display = void*;
+alias Seat = void*;
+alias Keyboard = void*;
+alias Pointer = void*;
 
 EventMap[EventKey.len] event_map;
 Vec2f mouse_pos;
@@ -228,7 +229,7 @@ fn void pointerEnter(LinuxWindow* data, Pointer pointer, int serial, Surface sur
 fn void pointerLeave(LinuxWindow* data, Pointer pointer, int serial, Surface surface) {}
 
 fn void pointerMotion(LinuxWindow* data, Pointer pointer, uint time, int x, int y) {
-    mouse_pos = Vec2f{(float)fixed_to_double(x), -(float)fixed_to_double(y)};
+    mouse_pos = {(float)fixed_to_double(x), -(float)fixed_to_double(y)};
 }
 
 fn void pointerButton(LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state) {
@@ -327,18 +328,18 @@ PointerListener pointerListener = {
 };
 
 // Creates new XCB window
-fn Window! new(Params params, String name) {
+fn Window? new(Params params, String name) {
     LinuxWindow window = {
         .open = true,
     };
 
     Display display = connect(null);
-    if (display == null) return WindowError.FAILED_OPENING_WINDOW?;
+    if (display == null) return FAILED_OPENING_WINDOW?;
 
     window.display = display;
 
     Registry registry = get_registry(display);
-    if (registry == null) return WindowError.FAILED_OPENING_WINDOW?;
+    if (registry == null) return FAILED_OPENING_WINDOW?;
     proxy_add_listener(registry, &registryListener, &window);
     rountrip(display);
 

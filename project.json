@@ -3,28 +3,21 @@
 	"warnings": ["no-unused"],
 	"authors": [],
 	"version": "0.1.0",
-	"dependency-search-paths": ["./dependencies"],
-	"dependencies": ["vk", "c3w"],
 	"script-dir": "./",
-	"sources": [],
-	"linked-libraries": ["vulkan"],
+	"dependency-search-paths": ["./"],
+	"sources": ["darwin/**", "linux/**", "win32/**", "main.c3"],
+	"linked-libraries": [],
 	"features": [],
 	"targets": {
-		"cube": {
-			"type": "executable",
-			"sources": ["./cube/main.c3", "./cube/camera.c3"],
-			"dependencies": [],
-			"features": ["WAYLAND"]
-		},
 		"test": {
 			"type": "executable",
 			"sources": ["./test/main.c3"],
-			"features": ["WAYLAND"],
+			"features": ["X11"],
 			"dependencies": []
 		},
 		"zip": {
 			"type": "prepare",
-			"exec": ["cd ./dependencies/window.c3l && zip ../../window.c3l ./*.c3 ./darwin/*.c3 ./linux/*.c3 ./manifest.json"]
+			"exec": ["zip window.c3l ./*.c3 ./darwin/*.c3 ./linux/*.c3 ./win32/*.c3 ./manifest.json"]
 		}
 	},
 	"output": "./build"

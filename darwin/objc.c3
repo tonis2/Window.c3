@@ -4,52 +4,48 @@ import std::io;
 import std::math;
 
 
-def SendBool = fn void*(void*, ObjcSelector, bool);
-def SendContentRec = fn void*(void*, ObjcSelector, NSRect, long, long, bool);
-def SendDequeueEvent = fn void*(void*, ObjcSelector, long, void*, ObjcId, bool);
-def SendDouble = fn void*(void*, ObjcSelector, double);
-def SendEvent = fn void*(void*, ObjcSelector, NSEvent);
-def SendId = fn void*(void*, ObjcSelector, ObjcId);
-def SendIdId = fn void*(void*, ObjcSelector, ObjcId, ObjcId);
-def SendInt = fn void*(void*, ObjcSelector, int);
-def SendPtr = fn void*(void*, ObjcSelector, void*);
-def SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
-def SendSize = fn void*(void*, ObjcSelector, NSSize);
-def SendString = fn void*(void*, ObjcSelector, ZString);
-def GetInt = fn int(void*, ObjcSelector);
-// def GetView = fn NSView(void*, ObjcSelector);
-def GetRect = fn NSRect(void*, ObjcSelector);
-def GetCharacters = fn NSString(void*, ObjcSelector);
-def GetPoint = fn NSPoint(void*, ObjcSelector);
-def GetID = fn ObjcId*(void*, ObjcSelector);
-def GetPtr = fn void*(void*, ObjcSelector);
+alias SendBool = fn void*(void*, ObjcSelector, bool);
+alias SendContentRec = fn void*(void*, ObjcSelector, NSRect, long, long, bool);
+alias SendDequeueEvent = fn void*(void*, ObjcSelector, long, void*, ObjcId, bool);
+alias SendDouble = fn void*(void*, ObjcSelector, double);
+alias SendEvent = fn void*(void*, ObjcSelector, NSEvent);
+alias SendId = fn void*(void*, ObjcSelector, ObjcId);
+alias SendIdId = fn void*(void*, ObjcSelector, ObjcId, ObjcId);
+alias SendInt = fn void*(void*, ObjcSelector, int);
+alias SendPtr = fn void*(void*, ObjcSelector, void*);
+alias SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
+alias SendSize = fn void*(void*, ObjcSelector, NSSize);
+alias SendString = fn void*(void*, ObjcSelector, ZString);
+alias GetInt = fn int(void*, ObjcSelector);
+// alias GetView = fn NSView(void*, ObjcSelector);
+alias GetRect = fn NSRect(void*, ObjcSelector);
+alias GetCharacters = fn NSString(void*, ObjcSelector);
+alias GetPoint = fn NSPoint(void*, ObjcSelector);
+alias GetID = fn ObjcId*(void*, ObjcSelector);
+alias GetPtr = fn void*(void*, ObjcSelector);
 
-fault ObjcFault {
-    IVAR_NOT_SET,
-    IVAR_NOT_FOUND,
-    METHOD_NOT_SET,
-}
+faultdef IVAR_NOT_SET, IVAR_NOT_FOUND, METHOD_NOT_SET;
 
 struct NSObject {
     ObjcClass cls;
     ObjcId* id;
 }
 
-def NSApplication = NSObject;
-def NSStatusBar = NSObject;
-def NSImage = NSObject;
-def NSMenu = NSObject;
-def NSMenuItem = NSObject;
-def NSString = NSObject;
-def NSWindow = NSObject;
-def NSAutoreleasePool = NSObject;
-def NSValue = NSObject;
-def NSDate = NSObject;
-def CALayer = NSObject;
-def NSView = NSObject;
+alias NSApplication = NSObject;
+alias NSStatusBar = NSObject;
+alias NSImage = NSObject;
+alias NSMenu = NSObject;
+alias NSMenuItem = NSObject;
+alias NSString = NSObject;
+alias NSWindow = NSObject;
+alias NSAutoreleasePool = NSObject;
+alias NSValue = NSObject;
+alias NSDate = NSObject;
+alias CALayer = NSObject;
+alias NSView = NSObject;
 
-distinct NSEvent = void*;
-distinct NSStatusBarItem = void*;
+typedef NSEvent = void*;
+typedef NSStatusBarItem = void*;
 
 fn NSObject NSObject.new(ZString cls_name = "NSObject") @operator(construct)
 {
@@ -175,9 +171,9 @@ fn void NSDate.distantPast(&self)
 }
 
 <* @require self.id `NSWindow is not initialized` *>
-fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_defer)
+fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_aliaser)
 {
-    self.id = objc::msg_send(self.id, SendContentRec, "initWithContentRect:styleMask:backing:defer:", rect, style_mask, backing, is_defer);
+    self.id = objc::msg_send(self.id, SendContentRec, "initWithContentRect:styleMask:backing:aliaser:", rect, style_mask, backing, is_aliaser);
 }
 
 <* @require self.id `NSWindow is not initialized` *>
@@ -205,25 +201,25 @@ fn void NSObject.release(&self)
 }
 
 <* @require self.id == null `NSObject is already initialized` *>
-macro NSObject! NSObject.add_method(NSObject self, ZString name, void* imp, ZString types = "")
+macro NSObject? NSObject.add_method(NSObject self, ZString name, void* imp, ZString types = "")
 {
     if(!objc::class_addMethod(self.cls, objc::sel_registerName(name), imp, types)) return ObjcFault.METHOD_NOT_SET?;
     return self;
 }
 
-macro ObjcClass! ObjcClass.add_method(ObjcClass self, ZString name, void* imp, ZString types = "") 
+macro ObjcClass? ObjcClass.add_method(ObjcClass self, ZString name, void* imp, ZString types = "") 
 {
     if(!objc::class_addMethod(self, register_name(name), imp, types)) return ObjcFault.METHOD_NOT_SET?;
     return self;
 }
 
-macro NSObject! NSObject.add_ivar(NSObject self, ZString name, int size, double alignment, ZString types) 
+macro NSObject? NSObject.add_ivar(NSObject self, ZString name, int size, double alignment, ZString types) 
 {
     if(!objc::class_addIvar(self.cls, name, size, alignment, types)) return ObjcFault.IVAR_NOT_SET?;
     return self;
 }
 
-macro ObjcIvar! ObjcId.get_ivar(ObjcId self, ZString name)
+macro ObjcIvar? ObjcId.get_ivar(ObjcId self, ZString name)
 {
     ObjcIvar out;
     if(!objc::getInstanceVariable(self, name, &out)) return ObjcFault.IVAR_NOT_FOUND?; 
@@ -246,16 +242,14 @@ fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifier
 fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);
 fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId, "setLayer:", layer.id);
 
-
 <* @require self.id `NSWindow is not initialized` *>
 fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
 
 <* @require self.id `NSWindow is not initialized` *>
 fn NSPoint NSWindow.get_mouse_pos(&self) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
 
-
 fn NSView NSWindow.get_view(&self) {
-    return NSObject {
+    return {
         .cls = objc::getClass("NSView"),
         .id = objc::msg_send(self.id, GetID, "contentView")
     };

@@ -4,10 +4,10 @@ import std::math;
 import std::io;
 import std::core::types;
 
-def Display = void*;
-def Connection = void*;
-def XCB_Window = void*;
-def XCB_setup = void*;
+alias Display = void*;
+alias Connection = void*;
+alias XCB_Window = void*;
+alias XCB_setup = void*;
 
 struct LinuxWindow {
     Display display;
@@ -83,7 +83,7 @@ enum XcbPropMode : uint (uint value)
 
 struct XscreenData {
     uint   root;
-    uint   default_colormap;
+    uint   aliasault_colormap;
     uint   white_pixel;
     uint   black_pixel;
     uint   current_input_masks;
@@ -131,13 +131,13 @@ struct MouseParams {
 }
 
 // Creates new XCB window
-fn Window! new(Params params, String name) {
+fn Window? new(Params params, String name) {
     Display dpy = openDisplay(null);
 
     if (!dpy)
     {
         io::printfn("Failed to open display");
-        return WindowError.FAILED_OPENING_WINDOW?;
+        return FAILED_OPENING_WINDOW?;
     }
 
     Connection connection = xcbConnect(null, null);
@@ -174,7 +174,7 @@ fn Window! new(Params params, String name) {
     // XCB_ATOM_WM_NAME, XCB_ATOM_STRING
     xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, 39, 31, 8, name.len, name);
     Window response = {
-        .src = LinuxWindow {
+        .src = {
             .window = window,
             .connection = connection,
             .display = dpy,
