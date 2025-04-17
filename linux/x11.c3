@@ -187,10 +187,10 @@ fn Window? new(Params params, String name) {
     return response;
 }
 
-fn Vec2f Window.getMousePos(self) {
+fn float[<2>] Window.getMousePos(self) {
     void* err;  
     KeyPressEvent* mouse_pos = xcbQueryPointerReply(self.src.connection, xcbQueryPointer(self.src.connection, self.src.window), &err);
-    Vec2f response = {mouse_pos.root_x, mouse_pos.root_y};
+    float[<2>] response = {mouse_pos.root_x, mouse_pos.root_y};
     free(mouse_pos);
     free(err);
     return response;
