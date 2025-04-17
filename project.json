@@ -2,7 +2,7 @@
 	"langrev": "1",
 	"warnings": ["no-unused"],
 	"authors": [],
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"script-dir": "./",
 	"dependency-search-paths": ["./"],
 	"sources": ["darwin/**", "linux/**", "win32/**", "main.c3"],
@@ -12,7 +12,7 @@
 		"test": {
 			"type": "executable",
 			"sources": ["./test/main.c3"],
-			"features": ["X11"],
+			"features": ["WAYLAND"],
 			"dependencies": []
 		},
 		"zip": {

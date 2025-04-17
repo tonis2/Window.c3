@@ -365,6 +365,8 @@ fn Window? new(Params params, String name) {
     // Set max size
     proxy_marshal_flags(window.top_level, 7, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, params.width, params.height);
 
+
+
     surface_commit(window.surface);
     rountrip(display);
     surface_commit(window.surface);
