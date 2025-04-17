@@ -41,7 +41,7 @@ alias Keyboard = void*;
 alias Pointer = void*;
 
 EventMap[EventKey.len] event_map;
-Vec2f mouse_pos;
+float[<2>] mouse_pos;
 
 struct LinuxWindow {
     Display display;
@@ -385,7 +385,7 @@ fn Window? new(Params params, String name) {
     };
 }
 
-fn Vec2f Window.getMousePos(self) {
+fn float[<2>] Window.getMousePos(self) {
     return mouse_pos;
 }
 
