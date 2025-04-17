@@ -4,8 +4,6 @@ module c3w;
 import std;
 import std::os::win32;
 
-alias Vec2f = float[<2>];
-
 struct Window {
     DarwinWindow src @if(env::os_is_darwin());
 	LinuxWindow src @if(env::LINUX);
