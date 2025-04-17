@@ -97,7 +97,7 @@ fn Window? new(Params params, String name) {
     return response;
 }
 
-fn Vec2f Window.getMousePos(self) {
+fn float[<2>] Window.getMousePos(self) {
    NSPoint point = self.src.window.get_mouse_pos();
    return {(float)point.x, (float)point.y};
 }
