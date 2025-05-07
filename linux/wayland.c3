@@ -40,8 +40,9 @@ alias Seat = void*;
 alias Keyboard = void*;
 alias Pointer = void*;
 
-EventMap[EventKey.len] event_map;
+
 float[<2>] mouse_pos;
+EventMap event_map;
 
 struct LinuxWindow {
     Display display;
@@ -50,7 +51,7 @@ struct LinuxWindow {
     Seat seat;
     XDG_surface xdg_surface;
     XDG_top_level top_level;
-    // EventMap[EventKey.len] event_map;
+    // EventMap event_map;
     // Vec2f mouse_pos;
     bool open;
 }
@@ -213,13 +214,7 @@ fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, voi
 fn void kbKey(LinuxWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
     EventKey keyboard_key = @enum_from_value(EventKey, value, key + 8)!!;
-
-    foreach (&item: event_map) {
-        if (item.key == keyboard_key) {
-            item.selected = (bool)state;
-            break;
-        };
-    };
+    event_map.set(keyboard_key, (bool)state);
 }
 
 fn void kbMod(LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group) {}
@@ -233,28 +228,28 @@ fn void pointerMotion(LinuxWindow* data, Pointer pointer, uint time, int x, int 
 }
 
 fn void pointerButton(LinuxWindow* data, Pointer pointer, int serial, uint time, uint button, uint state) {
-    //Left mouse button
+    // Left mouse button
     if (button == 272) {
-        event_map[EventKey.len - 3].selected = (bool)state;
+        event_map.set(LEFT_MOUSE, (bool)state);
     }
 
-    //Right mouse button
+    // Right mouse button
     if (button == 273) {
-        event_map[EventKey.len - 2].selected  = (bool)state;
+        event_map.set(RIGHT_MOUSE, (bool)state);
     }
     
-    //Middle mouse button
+    // Middle mouse button
     if (button == 274) {
-        event_map[EventKey.len - 1].selected  = (bool)state;
+        event_map.set(MIDDLE_MOUSE, (bool)state);
     }
 }
 
 fn void pointerAxis(LinuxWindow* data, Pointer pointer, uint time, uint axis, int value) {
     // Mouse scroll event
     if (value > 0) {
-        event_map[EventKey.len - 5].selected  = true;
+        event_map.set(MOUSE_SCROLL_UP, true);
     } else {
-        event_map[EventKey.len - 4].selected  = true;
+        event_map.set(MOUSE_SCROLL_DOWN, true);
     }
 }
 
@@ -365,18 +360,9 @@ fn Window? new(Params params, String name) {
     // Set max size
     proxy_marshal_flags(window.top_level, 7, &xdg_toplevel_interface, proxy_get_version(window.top_level), 0, null, params.width, params.height);
 
-
-
     surface_commit(window.surface);
     rountrip(display);
     surface_commit(window.surface);
-
-    foreach (index, item: EventKey.values) {
-        event_map[index] = {
-           .key = item,
-           .selected = false
-        };
-    }
 
     return {
         .src = window,
@@ -389,13 +375,12 @@ fn float[<2>] Window.getMousePos(self) {
     return mouse_pos;
 }
 
-fn EventMap[] Window.getEvent(&self) {
+fn EventMap Window.getEvent(&self) {
     // Reset mouse scroll
-    event_map[EventKey.len - 4].selected  = false;
-    event_map[EventKey.len - 5].selected  = false;
+    event_map.set(MOUSE_SCROLL_UP, false);
+    event_map.set(MOUSE_SCROLL_DOWN, false);
     dispatch(self.src.display);
-
-    return &event_map;
+    return event_map;
 }
 
 // Free and destroys window instance

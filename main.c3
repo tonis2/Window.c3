@@ -12,11 +12,14 @@ struct Window {
     float height;
 }
 
-fn bool EventMap.is_pressed(self, EventKey key) => self.key == key && self.selected == true;
+alias EventMap = HashMap{EventKey, bool};
 
-struct EventMap {
-    EventKey key;
-    bool selected;
+macro uint EventKey.hash(EventKey key) => builtin::@generic_hash(key.ordinal);
+
+fn bool EventMap.is_pressed(self, EventKey key) {
+    bool? item = self.get(key);
+    if (catch err = item) return false;
+    return item;
 }
 
 struct Event
