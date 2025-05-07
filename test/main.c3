@@ -18,14 +18,10 @@ fn void main(String[] args)
     bool running = true;
     while (running) {
 
-        c3w::EventMap[] event_map = win.getEvent();
+        c3w::EventMap event_map = win.getEvent();
 
-        foreach (event: event_map) {
-            switch {
-                case event.is_pressed(ESCAPE): {
-                    running = false;
-                }
-            }
+        if (event_map.is_pressed(ESCAPE)) {
+             running = false;
         }
     }    
 }

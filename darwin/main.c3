@@ -9,7 +9,7 @@ struct DarwinWindow {
     NSApplication app;
     NSView view;
     CALayer layer;
-    EventMap[EventKey.len] event_map;
+    EventMap event_map;
 }
 
 fn bool on_close(ObjcId self)
@@ -87,13 +87,6 @@ fn Window? new(Params params, String name) {
         .height = params.height
     };
 
-    foreach (index, item: EventKey.values) {
-        response.src.event_map[index] = {
-            .key = item,
-            .selected = false
-        };
-    }
-
     return response;
 }
 
@@ -117,8 +110,8 @@ fn EventMap[] Window.getEvent(&self) {
     NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
     int type = event.get_type();
 
-    self.src.event_map[EventKey.len - 4].selected = false;
-    self.src.event_map[EventKey.len - 5].selected = false;
+    self.src.event_map.set(MOUSE_SCROLL_UP, true);
+    self.src.event_map.set(MOUSE_SCROLL_UP, true);
 
     if (type != 0) {
         EventType event_type = @enum_from_value(EventType, value, type)!!;
@@ -126,49 +119,33 @@ fn EventMap[] Window.getEvent(&self) {
             case SCROLL_WHEEL: {
                 double delta = event.get_delta();
                 if (delta > 0) {
-                    self.src.event_map[EventKey.len - 4].selected = true;
+                    self.src.event_map.set(MOUSE_SCROLL_UP, true);
                 }
                 else {
-                    self.src.event_map[EventKey.len - 5].selected = true;
+                    self.src.event_map.set(MOUSE_SCROLL_DOWN, true);
                 }
                 break;
             }
-            case LEFT_MOUSE_UP: {
-                self.src.event_map[EventKey.len - 3].selected = false;
-                break;
-            }
+            case LEFT_MOUSE_UP:
             case RIGHT_MOUSE_UP:
             {
-                self.src.event_map[EventKey.len - 2].selected = false;
+                self.src.event_map.set(event_type, false);
                 break;
             }
-            case LEFT_MOUSE_DOWN: {
-                self.src.event_map[EventKey.len - 3].selected = true;
-                break;
-            }
+            case LEFT_MOUSE_DOWN:
             case RIGHT_MOUSE_DOWN: {
-                self.src.event_map[EventKey.len - 2].selected = true;
+                self.src.event_map.set(event_type, true);
                 break;
             }
             case KEY_PRESSED: {
                 int key = event.get_key();
                 EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
-                foreach (&item: self.src.event_map) {
-                    if (item.key == event_value) {
-                        item.selected = true;
-                        break;
-                    };
-                };
+                self.src.event_map.set(event_value, true);
             }
             case KEY_RELEASED: {
                 int key = event.get_key();
                 EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
-                foreach (&item: self.src.event_map) {
-                    if (item.key == event_value) {
-                        item.selected = false;
-                        break;
-                    };
-                };
+                self.src.event_map.set(event_value, false);
             }
             default: {};
         }
@@ -176,7 +153,7 @@ fn EventMap[] Window.getEvent(&self) {
 
     self.src.window.sendEvent(event);
     self.src.app.updateWindows();
-    return &self.src.event_map;
+    return self.src.event_map;
 }
 
 fn void Window.free(&self) {

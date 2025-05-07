@@ -13,7 +13,7 @@ struct LinuxWindow {
     Display display;
     Connection connection;
     XCB_Window window;
-    EventMap[EventKey.len] event_map;
+    EventMap event_map;
     uint display_width;
     uint display_height;
 }
@@ -176,14 +176,7 @@ fn Window? new(Params params, String name) {
         .width = params.width,
         .height = params.height,
     };
-
-    foreach (index, item: EventKey.values) {
-        response.src.event_map[index] = {
-           .key = item,
-           .selected = false
-        };
-    }
-
+    
     return response;
 }
 
@@ -196,7 +189,7 @@ fn float[<2>] Window.getMousePos(self) {
     return response;
 }
 
-fn EventMap[] Window.getEvent(&self) {
+fn EventMap Window.getEvent(&self) {
    KeyPressEvent* event = xcbPollEvent(self.src.connection);
    Event event_response;
    defer free(event);
@@ -208,29 +201,18 @@ fn EventMap[] Window.getEvent(&self) {
         switch (type) {
             case KEY_RELEASED:
             case MOUSE_RELEASED: {
-                foreach (&item: self.src.event_map) {
-                    if (item.key == value) {
-                        item.selected = false;
-                        break;
-                    };
-                };
+                self.src.event_map.set(value, false);
             }
             case KEY_PRESSED:
             case MOUSE_PRESSED: {
-                foreach (&item: self.src.event_map) {
-                    if (item.key == value) {
-                        item.selected = true;
-                        break;
-                    };
-                };
+                self.src.event_map.set(value, true);
                 break;
             }
             default: {};
         }
-
     }
 
-    return &self.src.event_map;
+    return self.src.event_map;
 }
 
 // Free and destroys window instance
