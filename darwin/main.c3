@@ -128,7 +128,7 @@ fn EventMap Window.getEvent(&self) {
             }
             case LEFT_MOUSE_UP:
             {
-                self.src.event_map.set(LEFT_MOUSE, true);
+                self.src.event_map.set(LEFT_MOUSE, false);
                 break;
             }
             case RIGHT_MOUSE_UP:
