@@ -27,7 +27,7 @@ fn NSSize resize_window(ObjcId self, NSSize frame)
 }
 
 fn Window? new(Params params, String name) {
-    NSObject object = NSObject.new("NSObject"); 
+    NSObject object = new_object("NSObject"); 
     object.add_method("windowShouldClose:", &on_close)!!;
 
     NSApplication app = { .cls = objc::getClass("NSApplication") };
@@ -38,7 +38,7 @@ fn Window? new(Params params, String name) {
     win.alloc();
 
     ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val | WindowStyleMask.TITLED.val | WindowStyleMask.RESIZABLE.val;
-    win.initWithContentRect(NSRect {{params.x, params.y}, {params.width, params.height}}, window_style, window_style, false);
+    win.initWithContentRect((NSRect){{params.x, params.y}, {params.width, params.height}}, window_style, window_style, false);
    
     NSString window_title = new_object("NSString");
     window_title.stringWithUTF8String((ZString)name);
@@ -64,7 +64,7 @@ fn Window? new(Params params, String name) {
     app.finishLaunching();
 
     NSView view = win.get_view();
-    // NSObject.new("NSView");
+    // new_object("NSView");
     // view.alloc();
     // view.init();
 
@@ -95,7 +95,7 @@ fn float[<2>] Window.getMousePos(self) {
    return {(float)point.x, (float)point.y};
 }
 
-fn EventMap[] Window.getEvent(&self) {
+fn EventMap Window.getEvent(&self) {
     NSAutoreleasePool pool = new_object("NSAutoreleasePool"); 
     pool.alloc();
     pool.init();
@@ -127,14 +127,22 @@ fn EventMap[] Window.getEvent(&self) {
                 break;
             }
             case LEFT_MOUSE_UP:
+            {
+                self.src.event_map.set(LEFT_MOUSE, true);
+                break;
+            }
             case RIGHT_MOUSE_UP:
             {
-                self.src.event_map.set(event_type, false);
+                self.src.event_map.set(RIGHT_MOUSE, false);
                 break;
             }
             case LEFT_MOUSE_DOWN:
+            {
+                self.src.event_map.set(LEFT_MOUSE, true);
+                break;
+            }
             case RIGHT_MOUSE_DOWN: {
-                self.src.event_map.set(event_type, true);
+                self.src.event_map.set(RIGHT_MOUSE, true);
                 break;
             }
             case KEY_PRESSED: {

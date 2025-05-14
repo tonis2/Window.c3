@@ -17,6 +17,7 @@ alias SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
 alias SendSize = fn void*(void*, ObjcSelector, NSSize);
 alias SendString = fn void*(void*, ObjcSelector, ZString);
 alias GetInt = fn int(void*, ObjcSelector);
+alias GetDouble = fn double(void*, ObjcSelector);
 // alias GetView = fn NSView(void*, ObjcSelector);
 alias GetRect = fn NSRect(void*, ObjcSelector);
 alias GetCharacters = fn NSString(void*, ObjcSelector);
@@ -156,9 +157,9 @@ fn void NSDate.distantPast(&self)
 }
 
 
-fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_aliaser)
+fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_defer)
 {
-    self.id = objc::msg_send(self.id, SendContentRec, "initWithContentRect:styleMask:backing:aliaser:", rect, style_mask, backing, is_aliaser);
+    self.id = objc::msg_send(self.id, SendContentRec, "initWithContentRect:styleMask:backing:defer:", rect, style_mask, backing, is_defer);
 }
 
 fn void NSWindow.makeKeyAndOrderFront(&self, ObjcSelector sel)
@@ -185,26 +186,26 @@ fn void NSObject.release(&self)
 <* @require self.id == null `NSObject is already initialized` *>
 macro NSObject? NSObject.add_method(NSObject self, ZString name, void* imp, ZString types = "")
 {
-    if(!objc::class_addMethod(self.cls, objc::sel_registerName(name), imp, types)) return ObjcFault.METHOD_NOT_SET?;
+    if(!objc::class_addMethod(self.cls, objc::sel_registerName(name), imp, types)) return METHOD_NOT_SET?;
     return self;
 }
 
 macro ObjcClass? ObjcClass.add_method(ObjcClass self, ZString name, void* imp, ZString types = "") 
 {
-    if(!objc::class_addMethod(self, register_name(name), imp, types)) return ObjcFault.METHOD_NOT_SET?;
+    if(!objc::class_addMethod(self, register_name(name), imp, types)) return METHOD_NOT_SET?;
     return self;
 }
 
 macro NSObject? NSObject.add_ivar(NSObject self, ZString name, int size, double alignment, ZString types) 
 {
-    if(!objc::class_addIvar(self.cls, name, size, alignment, types)) return ObjcFault.IVAR_NOT_SET?;
+    if(!objc::class_addIvar(self.cls, name, size, alignment, types)) return IVAR_NOT_SET?;
     return self;
 }
 
 macro ObjcIvar? ObjcId.get_ivar(ObjcId self, ZString name)
 {
     ObjcIvar out;
-    if(!objc::getInstanceVariable(self, name, &out)) return ObjcFault.IVAR_NOT_FOUND?; 
+    if(!objc::getInstanceVariable(self, name, &out)) return IVAR_NOT_FOUND?; 
     return out;
 }
 
