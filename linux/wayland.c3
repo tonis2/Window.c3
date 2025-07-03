@@ -213,7 +213,7 @@ fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, voi
 
 fn void kbKey(LinuxWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
-    EventKey keyboard_key = @enum_from_value(EventKey, value, key + 8)!!;
+    EventKey keyboard_key = EventKey.lookup_field(value, key + 8)!!;
     event_map.set(keyboard_key, (bool)state);
 }
 
