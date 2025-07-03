@@ -114,7 +114,7 @@ fn EventMap[] Window.getEvent(&self) {
     self.src.event_map.set(MOUSE_SCROLL_UP, true);
 
     if (type != 0) {
-        EventType event_type = @enum_from_value(EventType, value, type)!!;
+        EventType event_type =  EventType.lookup_field(value, type)!!;
         switch (event_type) {
             case SCROLL_WHEEL: {
                 double delta = event.get_delta();
@@ -139,12 +139,12 @@ fn EventMap[] Window.getEvent(&self) {
             }
             case KEY_PRESSED: {
                 int key = event.get_key();
-                EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
+                EventKey event_value =  EventKey.lookup_field(value, key) ?? EventKey.A;
                 self.src.event_map.set(event_value, true);
             }
             case KEY_RELEASED: {
                 int key = event.get_key();
-                EventKey event_value = @enum_from_value(EventKey, value, key) ?? EventKey.A;
+                EventKey event_value =  EventKey.lookup_field(value, key) ?? EventKey.A;
                 self.src.event_map.set(event_value, false);
             }
             default: {};

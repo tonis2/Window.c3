@@ -195,8 +195,8 @@ fn EventMap Window.getEvent(&self) {
    defer free(event);
       
    if (event != null) {
-        EventType type = @enum_from_value(EventType, value, event.type)!!;
-        EventKey value = @enum_from_value(EventKey, value, event.value)!!;
+        EventType type = EventType.lookup_field(value, event.type)!!;
+        EventKey value = EventKey.lookup_field(value, event.value)!!;
     
         switch (type) {
             case KEY_RELEASED:
