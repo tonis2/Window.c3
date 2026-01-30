@@ -129,7 +129,7 @@ fn Window? new(Params params, String name) {
     if (!dpy)
     {
         io::printfn("Failed to open display");
-        return FAILED_OPENING_WINDOW?;
+        return FAILED_OPENING_WINDOW~;
     }
 
     Connection connection = xcbConnect(null, null);

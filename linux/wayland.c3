@@ -329,12 +329,12 @@ fn Window? new(Params params, String name) {
     };
 
     Display display = connect(null);
-    if (display == null) return FAILED_OPENING_WINDOW?;
+    if (display == null) return FAILED_OPENING_WINDOW~;
 
     window.display = display;
 
     Registry registry = get_registry(display);
-    if (registry == null) return FAILED_OPENING_WINDOW?;
+    if (registry == null) return FAILED_OPENING_WINDOW~;
     proxy_add_listener(registry, &registryListener, &window);
     rountrip(display);
 
