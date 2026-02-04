@@ -15,6 +15,7 @@ build/*
 *.exp
 
 CLAUDE.md
+.claude
 
 # Precompiled Headers
 *.gch
