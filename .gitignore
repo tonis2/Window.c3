@@ -12,6 +12,8 @@ build/*
 *.map
 *.exp
 
+CLAUDE.md
+
 # Precompiled Headers
 *.gch
 *.pch
@@ -25,7 +27,7 @@ build/*
 *.dll
 *.so
 *.so.*
-
+.claude/*
 
 # Executables
 *.exe
