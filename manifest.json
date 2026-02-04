@@ -12,8 +12,7 @@
     },
     "windows-x64" : {
       "sources": ["win32/main.c3", "main.c3"],
-      "c-sources" : ["win32/win32.c"],
-      "linked-libraries" : []
+      "linked-libraries" : ["user32.lib", "gdi32.lib", "kernel32.lib"]
     }
   }
 }

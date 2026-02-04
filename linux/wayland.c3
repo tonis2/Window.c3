@@ -213,8 +213,10 @@ fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, voi
 
 fn void kbKey(LinuxWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
-    EventKey keyboard_key = EventKey.lookup_field(value, key + 8)!!;
-    event_map.set(keyboard_key, (bool)state);
+    EventKey keyboard_key = linuxScancodeToEventKey(key + 8);
+    if (keyboard_key != EMPTY_KEY) {
+        event_map.set(keyboard_key, (bool)state);
+    }
 }
 
 fn void kbMod(LinuxWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group) {}

@@ -114,7 +114,13 @@ fn EventMap Window.getEvent(&self) {
     self.src.event_map.set(MOUSE_SCROLL_UP, true);
 
     if (type != 0) {
-        EventType event_type =  EventType.lookup_field(value, type)!!;
+        DarwinEventType? event_type_opt = DarwinEventType.lookup_field(value, type);
+        if (catch event_type_opt) {
+            self.src.window.sendEvent(event);
+            self.src.app.updateWindows();
+            return self.src.event_map;
+        }
+        DarwinEventType event_type = event_type_opt;
         switch (event_type) {
             case SCROLL_WHEEL: {
                 double delta = event.get_delta();
@@ -147,13 +153,17 @@ fn EventMap Window.getEvent(&self) {
             }
             case KEY_PRESSED: {
                 int key = event.get_key();
-                EventKey event_value =  EventKey.lookup_field(value, key) ?? EventKey.A;
-                self.src.event_map.set(event_value, true);
+                EventKey event_value = darwinKeycodeToEventKey(key);
+                if (event_value != EMPTY_KEY) {
+                    self.src.event_map.set(event_value, true);
+                }
             }
             case KEY_RELEASED: {
                 int key = event.get_key();
-                EventKey event_value =  EventKey.lookup_field(value, key) ?? EventKey.A;
-                self.src.event_map.set(event_value, false);
+                EventKey event_value = darwinKeycodeToEventKey(key);
+                if (event_value != EMPTY_KEY) {
+                    self.src.event_map.set(event_value, false);
+                }
             }
             default: {};
         }
@@ -170,129 +180,167 @@ fn void Window.free(&self) {
     self.src.app.terminate();
 }
 
-enum EventType : uint (uint value)
+// macOS NSEvent types (for internal use)
+enum DarwinEventType : uint (uint value)
 {
     EMPTY_KEY = 0,
     LEFT_MOUSE_DOWN     = 1,
-	LEFT_MOUSE_UP       = 2,
-	RIGHT_MOUSE_DOWN    = 3,
-	RIGHT_MOUSE_UP      = 4,
-	MOUSE_MOVED         = 5,
-	LEFT_MOUSE_DRAGGED  = 6,
-	RIGHT_MOUSE_DRAGGED = 7,
-	MOUSE_ENTERED       = 8,
-	MOUSE_EXITED        = 9,
-	KEY_PRESSED         = 10,
-	KEY_RELEASED        = 11,
-	FLAGS_CHANGED       = 12,
-	APPKIT_DEFINED      = 13,
-	SYSTEM_DEFINED      = 14,
-	APPLICATION_DEFINED = 15,
-	PERIODIC            = 16,
-	CURSOR_UPDATE       = 17,
-	SCROLL_WHEEL        = 22,
-	TABLET_POINT        = 23,
-	TABLET_PROXIMITY    = 24,
-	OTHER_MOUSE_DOWN    = 25,
-	OTHER_MOUSE_UP      = 26,
-	OTHER_MOUSE_DRAGGED = 27,
-	GESTURE             = 29,
-	MAGNIFY             = 30,
-	SWIPE               = 31,
-	ROTATE              = 18,
-	BEGIN_GESTURE       = 19,
-	END_GESTURE         = 20,
-	SMART_MAGNIFY       = 32,
-	QUICK_LOOK          = 33,
-	PRESSURE            = 34,
-	DIRECT_TOUCH        = 37,
-	CHANGE_MODE         = 38,
+    LEFT_MOUSE_UP       = 2,
+    RIGHT_MOUSE_DOWN    = 3,
+    RIGHT_MOUSE_UP      = 4,
+    MOUSE_MOVED         = 5,
+    LEFT_MOUSE_DRAGGED  = 6,
+    RIGHT_MOUSE_DRAGGED = 7,
+    MOUSE_ENTERED       = 8,
+    MOUSE_EXITED        = 9,
+    KEY_PRESSED         = 10,
+    KEY_RELEASED        = 11,
+    FLAGS_CHANGED       = 12,
+    APPKIT_DEFINED      = 13,
+    SYSTEM_DEFINED      = 14,
+    APPLICATION_DEFINED = 15,
+    PERIODIC            = 16,
+    CURSOR_UPDATE       = 17,
+    SCROLL_WHEEL        = 22,
+    TABLET_POINT        = 23,
+    TABLET_PROXIMITY    = 24,
+    OTHER_MOUSE_DOWN    = 25,
+    OTHER_MOUSE_UP      = 26,
+    OTHER_MOUSE_DRAGGED = 27,
+    GESTURE             = 29,
+    MAGNIFY             = 30,
+    SWIPE               = 31,
+    ROTATE              = 18,
+    BEGIN_GESTURE       = 19,
+    END_GESTURE         = 20,
+    SMART_MAGNIFY       = 32,
+    QUICK_LOOK          = 33,
+    PRESSURE            = 34,
+    DIRECT_TOUCH        = 37,
+    CHANGE_MODE         = 38,
 }
 
-enum EventKey : uint (uint value)
-{
-    A = 0,
-    B = 11,
-    C = 8,
-    D = 2,
-    E = 14,
-    F = 3,
-    G = 5,
-    H = 4,
-    I = 34,
-    J = 38,
-    K = 40,
-    L = 37,
-    M = 46,
-    N = 45,
-    O = 31,
-    P = 35,
-    Q = 12,
-    R = 15,
-    S = 1,
-    T = 17,
-    U = 32,
-    V = 9,
-    W = 13,
-    X = 7,
-    Y = 16,
-    Z = 6,
-
-    ESCAPE = 53,
-    RETURN = 36,
-    DELETE = 119,   
-    NUMLOCK = 77,  
-    SLASH = 106,
-    MULTIPLY = 63,    
-    SUBTRACT = 82,  
-    NUM_0 = 87,
-    NUM_1 = 88,    
-    NUM_2 = 89, 
-    NUM_3 = 83,  
-    NUM_4 = 84,   
-    NUM_5 = 85,    
-    NUM_6 = 79, 
-    NUM_7 = 80,  
-    NUM_8 = 81,   
-    NUM_9 = 90,    
-    PERIOD = 91,    
-    KP_RETURN = 104,
-    F1 = 122,
-    F2 = 120,
-    F3 = 99,
-    F4 = 118,
-    F5 = 96,
-    F6 = 97,
-    F7 = 98,
-    F8 = 100,
-    F9 = 101,
-    F10 = 109,
-    F11 = 103,
-    F12 = 111,
-    F13 = 105,
-    F14 = 107,
-    F15 = 113,
-    F16 = 106,
-    F17 = 64,
-    F18 = 79,
-    F19 = 80,
-    F20 = 90,
-    VOLUME_UP = 72,
-    VOLUME_DOWN = 73,
-    MUTE = 74,
-    HOME = 115,
-    END = 119,
-    PAGE_UP = 116,
-    PAGE_DOWN = 121,
-    LEFT_ARROW = 123,
-    RIGHT_ARROW = 124,
-    DOWN_ARROW = 125,
-    UP_ARROW = 126,
-
-    MOUSE_SCROLL_DOWN = 270,
-    MOUSE_SCROLL_UP = 271,
-
-    LEFT_MOUSE = 272,
-    RIGHT_MOUSE = 273,
-    MIDDLE_MOUSE = 274,
+// Convert macOS keycode to unified EventKey
+fn EventKey darwinKeycodeToEventKey(int keycode) {
+    switch (keycode) {
+        // Letters
+        case 0: return A;
+        case 11: return B;
+        case 8: return C;
+        case 2: return D;
+        case 14: return E;
+        case 3: return F;
+        case 5: return G;
+        case 4: return H;
+        case 34: return I;
+        case 38: return J;
+        case 40: return K;
+        case 37: return L;
+        case 46: return M;
+        case 45: return N;
+        case 31: return O;
+        case 35: return P;
+        case 12: return Q;
+        case 15: return R;
+        case 1: return S;
+        case 17: return T;
+        case 32: return U;
+        case 9: return V;
+        case 13: return W;
+        case 7: return X;
+        case 16: return Y;
+        case 6: return Z;
+        // Number row
+        case 29: return KEY_0;
+        case 18: return KEY_1;
+        case 19: return KEY_2;
+        case 20: return KEY_3;
+        case 21: return KEY_4;
+        case 23: return KEY_5;
+        case 22: return KEY_6;
+        case 26: return KEY_7;
+        case 28: return KEY_8;
+        case 25: return KEY_9;
+        // Special keys
+        case 53: return ESCAPE;
+        case 36: return RETURN;
+        case 49: return SPACE;
+        case 51: return DELETE;
+        case 48: return TAB;
+        case 117: return BACKSPACE;  // Forward delete
+        case 57: return CAPS_LOCK;
+        // Modifier keys
+        case 56: return LEFT_SHIFT;
+        case 60: return RIGHT_SHIFT;
+        case 59: return LEFT_CTRL;
+        case 62: return RIGHT_CTRL;
+        case 58: return LEFT_ALT;    // Option
+        case 61: return RIGHT_ALT;   // Right Option
+        case 55: return LEFT_SUPER;  // Command
+        case 54: return RIGHT_SUPER; // Right Command
+        case 110: return MENU;       // Context menu (if present)
+        // Arrow keys
+        case 123: return LEFT_ARROW;
+        case 124: return RIGHT_ARROW;
+        case 125: return DOWN_ARROW;
+        case 126: return UP_ARROW;
+        // Numpad
+        case 71: return NUMLOCK;
+        case 82: return NUM_0;
+        case 83: return NUM_1;
+        case 84: return NUM_2;
+        case 85: return NUM_3;
+        case 86: return NUM_4;
+        case 87: return NUM_5;
+        case 88: return NUM_6;
+        case 89: return NUM_7;
+        case 91: return NUM_8;
+        case 92: return NUM_9;
+        case 76: return KP_RETURN;
+        case 69: return KP_ADD;
+        case 78: return KP_SUBTRACT;
+        case 67: return KP_MULTIPLY;
+        case 75: return KP_DIVIDE;
+        case 65: return KP_DECIMAL;
+        // Function keys
+        case 122: return F1;
+        case 120: return F2;
+        case 99: return F3;
+        case 118: return F4;
+        case 96: return F5;
+        case 97: return F6;
+        case 98: return F7;
+        case 100: return F8;
+        case 101: return F9;
+        case 109: return F10;
+        case 103: return F11;
+        case 111: return F12;
+        case 105: return F13;
+        case 107: return F14;
+        case 113: return F15;
+        case 106: return F16;
+        case 64: return F17;
+        case 79: return F18;
+        case 80: return F19;
+        case 90: return F20;
+        // Navigation
+        case 115: return HOME;
+        case 119: return END;
+        case 116: return PAGE_UP;
+        case 121: return PAGE_DOWN;
+        case 114: return INSERT;     // Help key acts as Insert
+        // Punctuation and symbols
+        case 27: return MINUS;
+        case 24: return EQUALS;
+        case 33: return LEFT_BRACKET;
+        case 30: return RIGHT_BRACKET;
+        case 42: return BACKSLASH;
+        case 41: return SEMICOLON;
+        case 39: return APOSTROPHE;
+        case 50: return GRAVE;
+        case 43: return COMMA;
+        case 47: return PERIOD_KEY;
+        case 44: return SLASH_KEY;
+        default: return EMPTY_KEY;
+    }
 }
