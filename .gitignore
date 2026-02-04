@@ -1,4 +1,6 @@
 # Prerequisites
+
+.xwin-cache
 *.d
 build/*
 # Object files

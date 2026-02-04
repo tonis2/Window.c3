@@ -15,6 +15,13 @@
 			"features": ["WAYLAND"],
 			"dependencies": []
 		},
+		"test-win": {
+			"type": "executable",
+			"sources": ["./test/main.c3"],
+			"target": "windows-x64",
+			"winsdk": "/home/tonis/.xwin/lib",
+			"dependencies": []
+		},
 		"zip": {
 			"type": "prepare",
 			"exec": ["zip window.c3l ./*.c3 ./darwin/*.c3 ./linux/*.c3 ./win32/*.c3 ./manifest.json"]
