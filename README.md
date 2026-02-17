@@ -1,37 +1,155 @@
 # Window.c3
-Window manager for [C3](https://c3-lang.org/)
 
-Basic window manager, currently meant to be used with vulkan.
+A cross-platform window management library for [C3](https://c3-lang.org/), designed for use with Vulkan graphics applications.
 
-Currently supports
-* Windows (win32) (todo)
-* MacOS (cocoa)
-* Linux (X11, Wayland)
+### Supported Platforms
 
-### How to use
-Add `window.c3l` file to your C3 project dependencies folder, and then link it in `project.json` 
-with `"dependencies": ["c3w"]`
+- Windows (Win32)
+- macOS (Cocoa)
+- Linux (Wayland, X11)
 
+## Installation
 
-Running example:
-Install [C3](https://c3-lang.org/), [VulkanSDK](https://vulkan.lunarg.com/sdk/home)
-Then run example with `c3c run cube`
+1. Download the `window.c3l` file from releases
+2. Place it in your project's dependency directory
+3. Add it to your `project.json`:
 
-------
-### Running with vulkan on macOS
+```json
+{
+    "dependencies": ["c3w"]
+}
+```
 
-Install [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac) and add vulkan lib file path as `rpath` to the run command.
-Its the folder with `vulkan.1.dylib` file
-````
+### Linux Display Server
+
+On Linux, select your display server by adding a feature flag in `project.json`:
+
+```json
+{
+    "features": ["WAYLAND"]
+}
+```
+
+or
+
+```json
+{
+    "features": ["X11"]
+}
+```
+
+## Quick Start
+
+```c3
+import c3w;
+
+fn void main(String[] args)
+{
+    c3w::Window win = c3w::new(
+        params: {
+            .width = 900,
+            .height = 600,
+            .x = 0,
+            .y = 0
+        },
+        name: "My Window"
+    )!!;
+
+    defer win.free();
+
+    bool running = true;
+    while (running) {
+        c3w::EventMap event_map = win.getEvent();
+
+        if (event_map.is_pressed(ESCAPE)) {
+            running = false;
+        }
+    }
+}
+```
+
+## API Reference
+
+### `c3w::new`
+
+Creates a new window.
+
+```c3
+fn Window? new(Params params, String name)
+```
+
+- `params` - Window position and size (`x`, `y`, `width`, `height`)
+- `name` - Window title
+
+Returns a `Window` or the fault `FAILED_OPENING_WINDOW`.
+
+### `Window.getEvent`
+
+Polls for window events and returns the current input state.
+
+```c3
+fn EventMap Window.getEvent(&self)
+```
+
+Returns an `EventMap` (a hashmap of pressed keys/buttons). Use `is_pressed()` to query it.
+
+### `Window.getMousePos`
+
+Returns the current mouse position relative to the window.
+
+```c3
+fn float[<2>] Window.getMousePos(self)
+```
+
+### `Window.free`
+
+Releases window resources. Call when done with the window.
+
+```c3
+fn void Window.free(&self)
+```
+
+### `EventMap.is_pressed`
+
+Checks if a key or mouse button is currently pressed.
+
+```c3
+fn bool EventMap.is_pressed(self, EventKey key)
+```
+
+### Event Types
+
+The `EventType` enum indicates what kind of event occurred:
+
+| Event | Description |
+|---|---|
+| `KEY_PRESSED` | A keyboard key was pressed |
+| `KEY_RELEASED` | A keyboard key was released |
+| `MOUSE_PRESSED` | A mouse button was pressed |
+| `MOUSE_RELEASED` | A mouse button was released |
+| `MOUSE_MOTION` | The mouse moved |
+| `WINDOW_REFRESH` | The window needs redrawing |
+| `QUIT` | The window was closed |
+
+### Event Keys
+
+The `EventKey` enum covers keyboard keys and mouse buttons:
+
+- **Letters:** `A` - `Z`
+- **Numbers:** `KEY_0` - `KEY_9`
+- **Function keys:** `F1` - `F20`
+- **Arrows:** `LEFT_ARROW`, `RIGHT_ARROW`, `UP_ARROW`, `DOWN_ARROW`
+- **Modifiers:** `LEFT_SHIFT`, `RIGHT_SHIFT`, `LEFT_CTRL`, `RIGHT_CTRL`, `LEFT_ALT`, `RIGHT_ALT`, `LEFT_SUPER`, `RIGHT_SUPER`
+- **Special:** `ESCAPE`, `RETURN`, `SPACE`, `TAB`, `BACKSPACE`, `DELETE`, `INSERT`, `CAPS_LOCK`
+- **Navigation:** `HOME`, `END`, `PAGE_UP`, `PAGE_DOWN`
+- **Mouse:** `LEFT_MOUSE`, `RIGHT_MOUSE`, `MIDDLE_MOUSE`, `MOUSE_SCROLL_UP`, `MOUSE_SCROLL_DOWN`
+
+## Using with Vulkan on macOS
+
+Install the [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac), then pass the Vulkan lib path as `rpath`:
+
+```
 c3c run cube -z -rpath -z /Users/my_user/VulkanSDK/macOS/lib
-````
-
-------
-### Running vulkan on linux
-Install [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac)
-
-Choosing wayland or X11 can be done with feature tag inside C3 `project.json`
 ```
-"features": ["WAYLAND"]
-"features": ["X11"]
-```
+
+Use the path to the folder containing `vulkan.1.dylib`.
