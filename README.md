@@ -144,12 +144,3 @@ The `EventKey` enum covers keyboard keys and mouse buttons:
 - **Navigation:** `HOME`, `END`, `PAGE_UP`, `PAGE_DOWN`
 - **Mouse:** `LEFT_MOUSE`, `RIGHT_MOUSE`, `MIDDLE_MOUSE`, `MOUSE_SCROLL_UP`, `MOUSE_SCROLL_DOWN`
 
-## Using with Vulkan on macOS
-
-Install the [VulkanSDK](https://vulkan.lunarg.com/sdk/home#mac), then pass the Vulkan lib path as `rpath`:
-
-```
-c3c run cube -z -rpath -z /Users/my_user/VulkanSDK/macOS/lib
-```
-
-Use the path to the folder containing `vulkan.1.dylib`.
