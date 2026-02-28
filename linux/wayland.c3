@@ -289,9 +289,9 @@ fn double fixed_to_double(int fixed) => fixed / 256.0;
 
 enum SeatCapability : uint (uint value)
 {
-	POINTER = 1,
-	KEYBOARD = 2,
-	TOUCH = 4,
+	POINTER  { 1 },
+	KEYBOARD { 2 },
+	TOUCH    { 4 },
 }
 
 fn void removeRegistry(LinuxWindow* window, Registry registry, uint name)
