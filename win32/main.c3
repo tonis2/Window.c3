@@ -65,32 +65,42 @@ extern fn int peekMessageW(
 	uint removeMsg
 ) @extern("PeekMessageW");
 
+
 extern fn void postQuitMessage(int exitCode) @extern("PostQuitMessage");
+
 
 extern fn HCursor loadCursorW(
 	HInstance instance,
 	Char16* name
 ) @extern("LoadCursorW");
 
+
 extern fn HIcon loadIconW(
 	HInstance instance,
 	Char16* name
 ) @extern("LoadIconW");
 
+
 extern fn bool getCursorPos(Point* point) @extern("GetCursorPos");
+
 
 extern fn bool screenToClient(
 	HWnd hwnd,
 	Point* point
 ) @extern("ScreenToClient");
 
+
 extern fn bool destroyWindow(HWnd hwnd) @extern("DestroyWindow");
+
 
 extern fn int releaseDC(HWnd hwnd, HDc hdc) @extern("ReleaseDC");
 
+
 extern fn HDc getDC(HWnd hwnd) @extern("GetDC");
 
+
 extern fn HInstance getModuleHandleW(Char16* name) @extern("GetModuleHandleW");
+
 
 
 struct Win32Window
