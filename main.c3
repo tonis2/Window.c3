@@ -40,100 +40,106 @@ struct Params {
 faultdef FAILED_OPENING_WINDOW;
 
 // Unified EventKey enum - platform-neutral key identifiers
-enum EventKey : uint
+// X11 keycode values for lookup_field
+enum EventKey : uint (uint code)
 {
-    EMPTY_KEY,
-    // Letters
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    // Number row
-    KEY_0, KEY_1, KEY_2, KEY_3, KEY_4,
-    KEY_5, KEY_6, KEY_7, KEY_8, KEY_9,
+    EMPTY_KEY { 0 },
+    // Letters (X11 keycodes: a=38, b=56, c=54, d=40, e=26, f=41, g=42, h=43, i=31, j=44, k=45, l=46, m=58)
+    A { 38 }, B { 56 }, C { 54 }, D { 40 }, E { 26 }, F { 41 }, G { 42 }, H { 43 }, I { 31 },
+    J { 44 }, K { 45 }, L { 46 }, M { 58 },
+    // N, O, P, Q, R, S, T, U, V, W, X, Y, Z (X11: n=57, o=32, p=33, q=24, r=27, s=39, t=28, u=30, v=55, w=25, x=53, y=29, z=52)
+    N { 57 }, O { 32 }, P { 33 }, Q { 24 }, R { 27 }, S { 39 }, T { 28 }, U { 30 }, V { 55 },
+    W { 25 }, X { 53 }, Y { 29 }, Z { 52 },
+    // Number row (X11: 1=10, 2=11, 3=12, 4=13, 5=14, 6=15, 7=16, 8=17, 9=18, 0=19)
+    KEY_0 { 19 }, KEY_1 { 10 }, KEY_2 { 11 }, KEY_3 { 12 }, KEY_4 { 13 },
+    KEY_5 { 14 }, KEY_6 { 15 }, KEY_7 { 16 }, KEY_8 { 17 }, KEY_9 { 18 },
     // Special keys
-    ESCAPE,
-    RETURN,
-    SPACE,
-    DELETE,
-    TAB,
-    BACKSPACE,
-    INSERT,
-    CAPS_LOCK,
+    ESCAPE { 9 },
+    RETURN { 36 },
+    SPACE { 65 },
+    DELETE { 119 },
+    TAB { 23 },
+    BACKSPACE { 22 },
+    INSERT { 118 },
+    CAPS_LOCK { 66 },
     // Modifier keys
-    LEFT_SHIFT,
-    RIGHT_SHIFT,
-    LEFT_CTRL,
-    RIGHT_CTRL,
-    LEFT_ALT,
-    RIGHT_ALT,
-    LEFT_SUPER,    // Windows key / Command key
-    RIGHT_SUPER,
-    MENU,          // Context menu key
+    LEFT_SHIFT { 50 },
+    RIGHT_SHIFT { 62 },
+    LEFT_CTRL { 37 },
+    RIGHT_CTRL { 105 },
+    LEFT_ALT { 64 },
+    RIGHT_ALT { 108 },
+    LEFT_SUPER { 133 },    // Windows key / Command key
+    RIGHT_SUPER { 134 },
+    MENU { 135 },          // Context menu key
     // Arrow keys
-    LEFT_ARROW,
-    RIGHT_ARROW,
-    UP_ARROW,
-    DOWN_ARROW,
-    // Numpad
-    NUMLOCK,
-    NUM_0, NUM_1, NUM_2, NUM_3, NUM_4,
-    NUM_5, NUM_6, NUM_7, NUM_8, NUM_9,
-    KP_RETURN,
-    KP_ADD,
-    KP_SUBTRACT,
-    KP_MULTIPLY,
-    KP_DIVIDE,
-    KP_DECIMAL,
+    LEFT_ARROW { 113 },
+    RIGHT_ARROW { 114 },
+    UP_ARROW { 111 },
+    DOWN_ARROW { 116 },
+    // Numpad (X11 keycodes)
+    NUMLOCK { 77 },
+    NUM_0 { 90 }, NUM_1 { 87 }, NUM_2 { 88 }, NUM_3 { 89 }, NUM_4 { 83 },
+    NUM_5 { 84 }, NUM_6 { 85 }, NUM_7 { 79 }, NUM_8 { 80 }, NUM_9 { 81 },
+    KP_RETURN { 104 },
+    KP_ADD { 86 },
+    KP_SUBTRACT { 82 },
+    KP_MULTIPLY { 63 },
+    KP_DIVIDE { 106 },
+    KP_DECIMAL { 91 },
     // Legacy aliases for numpad
-    MULTIPLY,
-    SLASH,
-    SUBTRACT,
-    PERIOD,
+    MULTIPLY { 63 },
+    SLASH { 106 },
+    SUBTRACT { 82 },
+    PERIOD { 91 },
     // Function keys
-    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
-    F13, F14, F15, F16, F17, F18, F19, F20,
+    F1 { 67 }, F2 { 68 }, F3 { 69 }, F4 { 70 }, F5 { 71 }, F6 { 72 },
+    F7 { 73 }, F8 { 74 }, F9 { 75 }, F10 { 76 }, F11 { 95 }, F12 { 96 },
+    F13 { 97 }, F14 { 98 }, F15 { 99 }, F16 { 100 }, F17 { 101 }, F18 { 102 }, F19 { 103 }, F20 { 104 },
     // Navigation
-    HOME,
-    END,
-    PAGE_UP,
-    PAGE_DOWN,
+    HOME { 110 },
+    END { 115 },
+    PAGE_UP { 112 },
+    PAGE_DOWN { 117 },
     // Punctuation and symbols
-    MINUS,         // -
-    EQUALS,        // =
-    LEFT_BRACKET,  // [
-    RIGHT_BRACKET, // ]
-    BACKSLASH,     // \
-    SEMICOLON,     // ;
-    APOSTROPHE,    // '
-    GRAVE,         // ` (backtick)
-    COMMA,         // ,
-    PERIOD_KEY,    // .
-    SLASH_KEY,     // /
+    MINUS { 20 },         // -
+    EQUALS { 21 },        // =
+    LEFT_BRACKET { 34 },  // [
+    RIGHT_BRACKET { 35 }, // ]
+    BACKSLASH { 51 },     // \
+    SEMICOLON { 47 },     // ;
+    APOSTROPHE { 48 },    // '
+    GRAVE { 49 },         // ` (backtick)
+    COMMA { 59 },         // ,
+    PERIOD_KEY { 60 },    // .
+    SLASH_KEY { 61 },     // /
     // Lock keys
-    SCROLL_LOCK,
-    PAUSE,
-    PRINT_SCREEN,
-    // Mouse
-    LEFT_MOUSE,
-    RIGHT_MOUSE,
-    MIDDLE_MOUSE,
-    MOUSE_SCROLL_UP,
-    MOUSE_SCROLL_DOWN,
-    MOUSE_4,
-    MOUSE_5,
+    SCROLL_LOCK { 78 },
+    PAUSE { 127 },
+    PRINT_SCREEN { 107 },
+    // Mouse buttons (X11 button codes: 1-5)
+    LEFT_MOUSE { 1 },
+    RIGHT_MOUSE { 3 },
+    MIDDLE_MOUSE { 2 },
+    MOUSE_SCROLL_UP { 4 },
+    MOUSE_SCROLL_DOWN { 5 },
+    MOUSE_4 { 8 },
+    MOUSE_5 { 9 },
 }
 
 // Unified EventType enum
-enum EventType : uint
+// X11 event type values: KeyPress=2, KeyRelease=3, ButtonPress=4, ButtonRelease=5, MotionNotify=6
+enum EventType : uint (uint code)
 {
-    EMPTY_EVENT,
-    KEY_PRESSED,
-    KEY_RELEASED,
-    MOUSE_PRESSED,
-    MOUSE_RELEASED,
-    MOUSE_MOTION,
-    WINDOW_INIT,
-    WINDOW_REFRESH,
-    QUIT,
-    DND,
-    DND_INIT,
+    EMPTY_EVENT { 0 },
+    KEY_PRESSED { 2 },
+    KEY_RELEASED { 3 },
+    MOUSE_PRESSED { 4 },
+    MOUSE_RELEASED { 5 },
+    MOUSE_MOTION { 6 },
+    WINDOW_INIT { 7 },
+    WINDOW_REFRESH { 8 },
+    QUIT { 9 },
+    DND { 10 },
+    DND_INIT { 11 },
 }
