@@ -97,10 +97,10 @@ fn Window? new(Params params, String name)
 	{
 		case WAYLAND:
 		{
-			WaylandWindow wl_win = wayland_create(params, name)!;
-			WaylandWindow* heap_win = mem::new(WaylandWindow);
-			*heap_win = wl_win;
-			linux_window.backend_data = heap_win;
+			WaylandWindow* wl = mem::new(WaylandWindow);
+			*wl = {};
+			wayland_create(wl, params, name)!;
+			linux_window.backend_data = wl;
 		}
 		case X11:
 		{
@@ -130,7 +130,8 @@ fn float[<2>] Window.getMousePos(self)
 	switch (self.src.backend)
 	{
 		case WAYLAND:
-			return wayland_getMousePos();
+			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
+			return wayland_getMousePos(wl);
 		case X11:
 			X11Window* x11 = (X11Window*)self.src.backend_data;
 			return x11_getMousePos(x11);
@@ -147,7 +148,7 @@ fn EventMap Window.getEvent(&self)
 		case WAYLAND:
 			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
 			wayland_pollEvents(wl);
-			return *wayland_getEventMap();
+			return wl.event_map;
 		case X11:
 			X11Window* x11 = (X11Window*)self.src.backend_data;
 			x11_pollEvents(x11, &self.src.event_map);

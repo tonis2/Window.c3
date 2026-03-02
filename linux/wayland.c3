@@ -119,9 +119,6 @@ alias Keyboard = void*;
 alias Pointer = void*;
 
 
-float[<2>] mouse_pos;
-EventMap event_map;
-
 struct WaylandWindow
 {
 	Display display;
@@ -131,6 +128,8 @@ struct WaylandWindow
 	XDG_surface xdg_surface;
 	XDG_top_level top_level;
 	bool initialized;
+	EventMap event_map;
+	float[<2>] mouse_pos;
 }
 
 struct WLArray
@@ -484,7 +483,7 @@ fn void kbKey(
 	EventKey keyboard_key = linuxScancodeToEventKey(key + 8);
 	if (keyboard_key != EMPTY_KEY)
 	{
-		event_map.set(keyboard_key, (bool)state);
+		data.event_map.set(keyboard_key, (bool)state);
 	}
 }
 
@@ -530,7 +529,7 @@ fn void pointerMotion(
 	int y
 )
 {
-	mouse_pos = { (float)fixed_to_double(x), -(float)fixed_to_double(y) };
+	data.mouse_pos = { (float)fixed_to_double(x), -(float)fixed_to_double(y) };
 }
 
 fn void pointerButton(
@@ -545,19 +544,19 @@ fn void pointerButton(
 	// Left mouse button
 	if (button == 272)
 	{
-		event_map.set(LEFT_MOUSE, (bool)state);
+		data.event_map.set(LEFT_MOUSE, (bool)state);
 	}
 
 	// Right mouse button
 	if (button == 273)
 	{
-		event_map.set(RIGHT_MOUSE, (bool)state);
+		data.event_map.set(RIGHT_MOUSE, (bool)state);
 	}
 
 	// Middle mouse button
 	if (button == 274)
 	{
-		event_map.set(MIDDLE_MOUSE, (bool)state);
+		data.event_map.set(MIDDLE_MOUSE, (bool)state);
 	}
 }
 
@@ -572,11 +571,11 @@ fn void pointerAxis(
 	// Mouse scroll event
 	if (value > 0)
 	{
-		event_map.set(MOUSE_SCROLL_UP, true);
+		data.event_map.set(MOUSE_SCROLL_UP, true);
 	}
 	else
 	{
-		event_map.set(MOUSE_SCROLL_DOWN, true);
+		data.event_map.set(MOUSE_SCROLL_DOWN, true);
 	}
 }
 
@@ -680,11 +679,9 @@ fn bool wayland_available()
 	return false;
 }
 
-// Creates new Wayland window
-fn WaylandWindow? wayland_create(Params params, String name)
+// Creates new Wayland window (caller provides heap-allocated WaylandWindow*)
+fn void? wayland_create(WaylandWindow* window, Params params, String name)
 {
-	WaylandWindow window = { .initialized = false, };
-
 	Display display = connect(null);
 	if (display == null) return FAILED_OPENING_WINDOW~;
 
@@ -692,7 +689,7 @@ fn WaylandWindow? wayland_create(Params params, String name)
 
 	Registry registry = get_registry(display);
 	if (registry == null) return FAILED_OPENING_WINDOW~;
-	proxy_add_listener(registry, &registryListener, &window);
+	proxy_add_listener(registry, &registryListener, window);
 	rountrip(display);
 
 	assert (window.surface);
@@ -709,7 +706,7 @@ fn WaylandWindow? wayland_create(Params params, String name)
 		window.surface
 	);
 	assert (window.xdg_surface);
-	proxy_add_listener(window.xdg_surface, &shellSurfaceListener, &window);
+	proxy_add_listener(window.xdg_surface, &shellSurfaceListener, window);
 
 	window.top_level = proxy_marshal_flags(
 		window.xdg_surface,
@@ -719,10 +716,8 @@ fn WaylandWindow? wayland_create(Params params, String name)
 		0,
 		null
 	);
-	proxy_add_listener(window.top_level, &topSurfaceListener, &window);
+	proxy_add_listener(window.top_level, &topSurfaceListener, window);
 	assert (window.top_level);
-	// set maximized
-	// proxy_marshal_flags(window.top_level, 9, &xdg_toplevel_interface, proxy_get_version(top_level), 0, null);
 	// Set title
 	proxy_marshal_flags(
 		window.top_level,
@@ -771,19 +766,18 @@ fn WaylandWindow? wayland_create(Params params, String name)
 	surface_commit(window.surface);
 
 	window.initialized = true;
-	return window;
 }
 
-fn float[<2>] wayland_getMousePos()
+fn float[<2>] wayland_getMousePos(WaylandWindow* self)
 {
-	return mouse_pos;
+	return self.mouse_pos;
 }
 
 fn void wayland_pollEvents(WaylandWindow* self)
 {
-	// Reset mouse scroll on the global event map (where callbacks write)
-	event_map.set(MOUSE_SCROLL_UP, false);
-	event_map.set(MOUSE_SCROLL_DOWN, false);
+	// Reset mouse scroll
+	self.event_map.set(MOUSE_SCROLL_UP, false);
+	self.event_map.set(MOUSE_SCROLL_DOWN, false);
 
 	// Non-blocking event dispatch
 	while (prepare_read(self.display) != 0)
@@ -802,11 +796,6 @@ fn void wayland_pollEvents(WaylandWindow* self)
 		cancel_read(self.display);
 	}
 	dispatch_pending(self.display);
-}
-
-fn EventMap* wayland_getEventMap()
-{
-	return &event_map;
 }
 
 // Free and destroys window instance
