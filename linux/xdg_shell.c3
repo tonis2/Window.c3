@@ -6,31 +6,12 @@ import std::core::types;
 alias XDG_surface = void*;
 alias XDG_top_level = void*;
 
-alias ShellSurfaceEvent = fn void(
-	WaylandWindow* data,
-	XDG_surface shell_surface,
-	uint serial
-);
+alias ShellSurfaceEvent = fn void(WaylandWindow* data, XDG_surface shell_surface, uint serial);
 
-alias TopSurfaceEvent = fn void(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	int width,
-	int height,
-	void* states
-);
+alias TopSurfaceEvent = fn void(WaylandWindow* data, XDG_top_level top_level, int width, int height, void* states);
 alias TopSurfaceClose = fn void(WaylandWindow* data, XDG_top_level top_level);
-alias TopSurfaceConfigureBounds = fn void(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	int width,
-	int height
-);
-alias TopSurfaceCapabilities = fn void(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	void* capabilities
-);
+alias TopSurfaceConfigureBounds = fn void(WaylandWindow* data, XDG_top_level top_level, int width, int height);
+alias TopSurfaceCapabilities = fn void(WaylandWindow* data, XDG_top_level top_level, void* capabilities);
 
 struct ShellSurfaceListener
 {
@@ -55,16 +36,9 @@ struct Message
 // Note: wl_* interface entries are null here and get patched
 // at runtime by wayland_load() after dlsym
 Interface*[] create_positioner = { &xdg_positioner_interface };
-Interface*[] get_xdg_surface = {
-	&xdg_surface_interface,
-	null
-};
+Interface*[] get_xdg_surface = { &xdg_surface_interface, null };
 Interface*[] get_toplevel = { &xdg_toplevel_interface };
-Interface*[] get_popup = {
-	&xdg_popup_interface,
-	null,
-	&xdg_positioner_interface
-};
+Interface*[] get_popup = { &xdg_popup_interface, null, &xdg_positioner_interface };
 Interface*[] set_parent = { &xdg_toplevel_interface };
 Interface*[] show_window_menu = { null, null, null, null };
 Interface*[] move = { null, null };
@@ -110,16 +84,9 @@ Interface xdg_surface_interface = {
 	.events = &surface_events
 };
 
-Message[*] popup_methods = {
-	{ "destroy", "", null },
-	{ "grab", "oi", &grab },
-	{ "repositioned", "u", null },
-};
+Message[*] popup_methods = { { "destroy", "", null }, { "grab", "oi", &grab }, { "repositioned", "u", null }, };
 
-Message[*] popup_events = {
-	{ "configure", "iiii", null },
-	{ "popup_done", "", null },
-};
+Message[*] popup_events = { { "configure", "iiii", null }, { "popup_done", "", null }, };
 
 Interface xdg_popup_interface = {
 	.name = "xdg_popup",
@@ -129,7 +96,6 @@ Interface xdg_popup_interface = {
 	.event_count = popup_events.len,
 	.events = &popup_events,
 };
-
 
 Message[*] top_methods = {
 	{ "destroy", "", null },
@@ -163,7 +129,6 @@ Interface xdg_toplevel_interface = {
 	.event_count = top_events.len,
 	.events = &top_events,
 };
-
 
 Message[*] positioner_methods = {
 	{ "destroy", "", null },

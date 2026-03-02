@@ -3,10 +3,14 @@ import std::io;
 
 extern fn char* getenv(char* name) @extern("getenv");
 
+
 // Dynamic library loading
 extern fn void* dlopen(char* filename, int flags) @extern("dlopen");
+
 extern fn void* dlsym(void* handle, char* symbol) @extern("dlsym");
+
 extern fn int dlclose(void* handle) @extern("dlclose");
+
 
 const int RTLD_LAZY = 1;
 const int RTLD_NOW = 2;
@@ -22,7 +26,7 @@ enum BackendType
 struct LinuxWindow
 {
 	BackendType backend;
-	void* backend_data;  // Pointer to either WaylandWindow or X11Window
+	void* backend_data; // Pointer to either WaylandWindow or X11Window
 	float width;
 	float height;
 	EventMap event_map;
@@ -96,31 +100,27 @@ fn Window? new(Params params, String name)
 	switch (backend)
 	{
 		case WAYLAND:
-		{
-			WaylandWindow* wl = mem::new(WaylandWindow);
-			*wl = {};
-			wayland_create(wl, params, name)!;
-			linux_window.backend_data = wl;
-		}
+			{
+				WaylandWindow* wl = mem::new(WaylandWindow);
+				*wl = { };
+				wayland_create(wl, params, name)!;
+				linux_window.backend_data = wl;
+			}
 		case X11:
-		{
-			X11Window x11_win = x11_create(params, name)!;
-			X11Window* heap_win = mem::new(X11Window);
-			*heap_win = x11_win;
-			linux_window.backend_data = heap_win;
-		}
+			{
+				X11Window x11_win = x11_create(params, name)!;
+				X11Window* heap_win = mem::new(X11Window);
+				*heap_win = x11_win;
+				linux_window.backend_data = heap_win;
+			}
 		default:
-		{
-			io::printfn("No display server available (tried Wayland and X11)");
-			return FAILED_OPENING_WINDOW~;
-		}
+			{
+				io::printfn("No display server available (tried Wayland and X11)");
+				return FAILED_OPENING_WINDOW~;
+			}
 	}
 
-	Window result = {
-		.src = linux_window,
-		.width = params.width,
-		.height = params.height,
-	};
+	Window result = { .src = linux_window, .width = params.width, .height = params.height, };
 	return result;
 }
 
