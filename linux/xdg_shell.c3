@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX && $feature ( WAYLAND )) @link("wayland-client");
+module c3w @if(env::LINUX);
 import std::math;
 import std::io;
 import std::core::types;
@@ -7,27 +7,27 @@ alias XDG_surface = void*;
 alias XDG_top_level = void*;
 
 alias ShellSurfaceEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_surface shell_surface,
 	uint serial
 );
 
 alias TopSurfaceEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	int width,
 	int height,
 	void* states
 );
-alias TopSurfaceClose = fn void(LinuxWindow* data, XDG_top_level top_level);
+alias TopSurfaceClose = fn void(WaylandWindow* data, XDG_top_level top_level);
 alias TopSurfaceConfigureBounds = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	int width,
 	int height
 );
 alias TopSurfaceCapabilities = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	void* capabilities
 );
@@ -52,24 +52,26 @@ struct Message
 	Interface*[]* types;
 }
 
+// Note: wl_* interface entries are null here and get patched
+// at runtime by wayland_load() after dlsym
 Interface*[] create_positioner = { &xdg_positioner_interface };
 Interface*[] get_xdg_surface = {
 	&xdg_surface_interface,
-	&wl_surface_interface
+	null
 };
 Interface*[] get_toplevel = { &xdg_toplevel_interface };
 Interface*[] get_popup = {
 	&xdg_popup_interface,
-	&wl_surface_interface,
+	null,
 	&xdg_positioner_interface
 };
 Interface*[] set_parent = { &xdg_toplevel_interface };
-Interface*[] show_window_menu = { &wl_seat_interface, null, null, null };
-Interface*[] move = { &wl_seat_interface, null };
-Interface*[] resize_edge = { &wl_seat_interface, null, null };
-Interface*[] set_fullscreen = { &wl_output_interface };
+Interface*[] show_window_menu = { null, null, null, null };
+Interface*[] move = { null, null };
+Interface*[] resize_edge = { null, null, null };
+Interface*[] set_fullscreen = { null };
 
-Interface*[] grab = { &wl_seat_interface, null };
+Interface*[] grab = { null, null };
 
 Message[*] base_methods = {
 	{ "destroy", "", null },
