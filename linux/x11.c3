@@ -271,20 +271,20 @@ fn EventMap Window.getEvent(&self)
 
 	if (event != null)
 	{
-		EventType type = EventType.lookup_field(value, event.type)!!;
-		EventKey value = EventKey.lookup_field(value, event.value)!!;
+		EventType type = EventType.lookup_field(code, event.type)!!;
+		EventKey key = EventKey.lookup_field(code, (uint)event.value)!!;
 
 		switch (type)
 		{
 			case KEY_RELEASED:
 			case MOUSE_RELEASED:
 				{
-					self.src.event_map.set(value, false);
+					self.src.event_map.set(key, false);
 				}
 			case KEY_PRESSED:
 			case MOUSE_PRESSED:
 				{
-					self.src.event_map.set(value, true);
+					self.src.event_map.set(key, true);
 					break;
 				}
 			default:
