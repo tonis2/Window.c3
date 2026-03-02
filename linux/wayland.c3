@@ -359,8 +359,7 @@ fn void removeRegistry(WaylandWindow* window, Registry registry, uint name)
 
 fn void shellPing(WaylandWindow* window, Shell shell, uint serial)
 {
-	io::printfn("shell ping");
-	// Pong back the ping
+	// Pong back the compositor's ping to prove we're responsive
 	proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
 }
 
@@ -370,6 +369,7 @@ fn void shellSurfaceConfigure(
 	uint serial
 )
 {
+	// ack_configure
 	proxy_marshal_flags(
 		surface,
 		4,
@@ -378,6 +378,8 @@ fn void shellSurfaceConfigure(
 		0,
 		serial
 	);
+	// Commit the surface so the compositor knows we're responsive
+	surface_commit(window.surface);
 }
 
 fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)

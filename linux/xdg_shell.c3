@@ -54,7 +54,7 @@ Message[*] base_methods = {
 	{ "pong", "u", null },
 };
 
-Message[*] base_events = { { "ping", "", null }, };
+Message[*] base_events = { { "ping", "u", null }, };
 
 Interface xdg_wm_base_interface = {
 	.name = "xdg_wm_base",
