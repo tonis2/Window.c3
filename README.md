@@ -22,21 +22,7 @@ A cross-platform window management library for [C3](https://c3-lang.org/), desig
 
 ### Linux Display Server
 
-On Linux, select your display server by adding a feature flag in `project.json`:
-
-```json
-{
-    "features": ["WAYLAND"]
-}
-```
-
-or
-
-```json
-{
-    "features": ["X11"]
-}
-```
+On Linux, the display server (Wayland or X11) is detected automatically at runtime. No feature flags are needed. The library loads `libwayland-client` and `libX11`/`libxcb` dynamically via `dlopen`, so neither development package is required at build time — only the runtime libraries that your system already has installed.
 
 ## Quick Start
 
