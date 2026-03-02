@@ -1,47 +1,47 @@
-module c3w @if(env::LINUX && $feature ( WAYLAND )) @link("wayland-client");
+module c3w @if(env::LINUX);
 import std::math;
 import std::io;
 import std::core::types;
 
 
 alias GlobalEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	void* wl_registry,
 	uint name,
 	char* iface,
 	uint ver
 );
-alias RemoveEvent = fn void(LinuxWindow* data, void* wl_registry, uint name);
-alias ShellPing = fn void(LinuxWindow* data, Shell shell, uint serial);
+alias RemoveEvent = fn void(WaylandWindow* data, void* wl_registry, uint name);
+alias ShellPing = fn void(WaylandWindow* data, Shell shell, uint serial);
 alias SeatCapabilitiesEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	void* wl_registry,
 	uint capabilities
 );
-alias SeatNameEvent = fn void(LinuxWindow* data, void* wl_registry, char* name);
+alias SeatNameEvent = fn void(WaylandWindow* data, void* wl_registry, char* name);
 
 alias KBmapEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint frmt,
 	int fd,
 	uint sz
 );
 alias KBenterEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint ser,
 	Surface surface,
 	WLArray* keys
 );
 alias KBleaveEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint ser,
 	Surface surface
 );
 alias KBkeyEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint serial,
 	uint type,
@@ -49,7 +49,7 @@ alias KBkeyEvent = fn void(
 	uint state
 );
 alias KBmodEvent = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint serial,
 	uint dep,
@@ -57,10 +57,10 @@ alias KBmodEvent = fn void(
 	uint lock,
 	uint group
 );
-alias KBrepEvent = fn void(LinuxWindow* data, Keyboard kb, int rate, int del);
+alias KBrepEvent = fn void(WaylandWindow* data, Keyboard kb, int rate, int del);
 
 alias PointerEnter = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	Surface surface,
@@ -68,20 +68,20 @@ alias PointerEnter = fn void(
 	int y
 );
 alias PointerLeave = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	Surface surface
 );
 alias PointerMotion = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	uint time,
 	int x,
 	int y
 );
 alias PointerButton = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	uint time,
@@ -89,17 +89,17 @@ alias PointerButton = fn void(
 	uint state
 );
 alias PointerAxis = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	uint time,
 	uint axis,
 	int value
 );
-alias PointerFrame = fn void(LinuxWindow* data, Pointer pointer);
-alias PointerAxisSrc = fn void(LinuxWindow* data, Pointer pointer, uint source);
-alias PointerAxisStop = fn void(LinuxWindow* data, Pointer pointer, uint axis);
+alias PointerFrame = fn void(WaylandWindow* data, Pointer pointer);
+alias PointerAxisSrc = fn void(WaylandWindow* data, Pointer pointer, uint source);
+alias PointerAxisStop = fn void(WaylandWindow* data, Pointer pointer, uint axis);
 alias PointerAxisValue = fn void(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	uint axis,
 	int value
@@ -122,7 +122,7 @@ alias Pointer = void*;
 float[<2>] mouse_pos;
 EventMap event_map;
 
-struct LinuxWindow
+struct WaylandWindow
 {
 	Display display;
 	Surface surface;
@@ -130,9 +130,7 @@ struct LinuxWindow
 	Seat seat;
 	XDG_surface xdg_surface;
 	XDG_top_level top_level;
-	// EventMap event_map;
-	// Vec2f mouse_pos;
-	bool open;
+	bool initialized;
 }
 
 struct WLArray
@@ -214,46 +212,107 @@ const uint WL_DISPLAY_GET_REGISTRY = 1;
 const uint WL_REGISTRY_BIND = 0;
 const uint WL_MARSHAL_FLAG_DESTROY = 1 << 0;
 
-extern Interface wl_registry_interface @extern("wl_registry_interface");
-extern Interface wl_compositor_interface @extern("wl_compositor_interface");
-extern Interface wl_surface_interface @extern("wl_surface_interface");
-extern Interface wl_shell_interface @extern("wl_shell_interface");
-extern Interface wl_output_interface @extern("wl_output_interface");
-extern Interface wl_seat_interface @extern("wl_seat_interface");
-extern Interface wl_subcompositor_interface @extern("wl_subcompositor_interface");
-extern Interface wl_keyboard_interface @extern("wl_keyboard_interface");
-extern Interface wl_pointer_interface @extern("wl_pointer_interface");
+// Function pointer types for dynamic loading
+alias FnWlDisplayConnect = fn Display(uint* window);
+alias FnWlDisplayDisconnect = fn void(Display display);
+alias FnWlProxyMarshalFlags = fn void*(Proxy proxy, uint opcode, void* inter, uint version, uint flags, ...);
+alias FnWlProxyAddListener = fn int(Proxy registry, void* callback, void* data);
+alias FnWlProxyDestroy = fn void(Proxy proxy);
+alias FnWlProxyGetVersion = fn uint(Proxy proxy);
+alias FnWlDisplayDispatch = fn int(Display display);
+alias FnWlDisplayRoundtrip = fn int(Display display);
+alias FnWlDisplayDispatchPending = fn int(Display display);
+alias FnWlDisplayFlush = fn int(Display display);
+alias FnWlDisplayPrepareRead = fn int(Display display);
+alias FnWlDisplayReadEvents = fn int(Display display);
+alias FnWlDisplayCancelRead = fn void(Display display);
+alias FnWlDisplayGetFd = fn int(Display display);
 
-extern fn Display connect(uint* window) @extern("wl_display_connect");
+// poll() from libc
+struct PollFd
+{
+	int fd;
+	short events;
+	short revents;
+}
+const short POLLIN = 1;
+extern fn int poll(PollFd* fds, uint nfds, int timeout) @extern("poll");
 
-extern fn void disconnect(Display display) @extern("wl_display_disconnect");
+// Function pointers loaded at runtime via dlsym
+FnWlDisplayConnect connect;
+FnWlDisplayDisconnect disconnect;
+FnWlProxyMarshalFlags proxy_marshal_flags;
+FnWlProxyAddListener proxy_add_listener;
+FnWlProxyDestroy proxy_destroy;
+FnWlProxyGetVersion proxy_get_version;
+FnWlDisplayDispatch dispatch;
+FnWlDisplayRoundtrip rountrip;
+FnWlDisplayDispatchPending dispatch_pending;
+FnWlDisplayFlush display_flush;
+FnWlDisplayPrepareRead prepare_read;
+FnWlDisplayReadEvents read_events;
+FnWlDisplayCancelRead cancel_read;
+FnWlDisplayGetFd display_get_fd;
 
-extern fn void subcompositor_surface(
-	Display display
-) @extern("wl_subcompositor_get_subsurface");
+// Interface pointers loaded at runtime via dlsym
+Interface* wl_registry_interface;
+Interface* wl_compositor_interface;
+Interface* wl_surface_interface;
+Interface* wl_shell_interface;
+Interface* wl_output_interface;
+Interface* wl_seat_interface;
+Interface* wl_subcompositor_interface;
+Interface* wl_keyboard_interface;
+Interface* wl_pointer_interface;
 
-extern fn void* proxy_marshal_flags(
-	Proxy proxy,
-	uint opcode,
-	void* inter,
-	uint version,
-	uint flags,
-	...
-) @extern("wl_proxy_marshal_flags");
+// Library handle
+void* _wl_lib;
 
-extern fn int proxy_add_listener(
-	Proxy registry,
-	void* callback,
-	void* data
-) @extern("wl_proxy_add_listener");
+fn bool wayland_load()
+{
+	if (_wl_lib) return true;
 
-extern fn void proxy_destroy(Proxy proxy) @extern("wl_proxy_destroy");
+	_wl_lib = dlopen("libwayland-client.so.0", RTLD_LAZY);
+	if (!_wl_lib) return false;
 
-extern fn uint proxy_get_version(Proxy proxy) @extern("wl_proxy_get_version");
+	// Load functions
+	connect = (FnWlDisplayConnect)dlsym(_wl_lib, "wl_display_connect");
+	disconnect = (FnWlDisplayDisconnect)dlsym(_wl_lib, "wl_display_disconnect");
+	proxy_marshal_flags = (FnWlProxyMarshalFlags)dlsym(_wl_lib, "wl_proxy_marshal_flags");
+	proxy_add_listener = (FnWlProxyAddListener)dlsym(_wl_lib, "wl_proxy_add_listener");
+	proxy_destroy = (FnWlProxyDestroy)dlsym(_wl_lib, "wl_proxy_destroy");
+	proxy_get_version = (FnWlProxyGetVersion)dlsym(_wl_lib, "wl_proxy_get_version");
+	dispatch = (FnWlDisplayDispatch)dlsym(_wl_lib, "wl_display_dispatch");
+	rountrip = (FnWlDisplayRoundtrip)dlsym(_wl_lib, "wl_display_roundtrip");
+	dispatch_pending = (FnWlDisplayDispatchPending)dlsym(_wl_lib, "wl_display_dispatch_pending");
+	display_flush = (FnWlDisplayFlush)dlsym(_wl_lib, "wl_display_flush");
+	prepare_read = (FnWlDisplayPrepareRead)dlsym(_wl_lib, "wl_display_prepare_read");
+	read_events = (FnWlDisplayReadEvents)dlsym(_wl_lib, "wl_display_read_events");
+	cancel_read = (FnWlDisplayCancelRead)dlsym(_wl_lib, "wl_display_cancel_read");
+	display_get_fd = (FnWlDisplayGetFd)dlsym(_wl_lib, "wl_display_get_fd");
 
-extern fn int dispatch(Display display) @extern("wl_display_dispatch");
+	// Load interface structs (dlsym returns pointer to the Interface)
+	wl_registry_interface = (Interface*)dlsym(_wl_lib, "wl_registry_interface");
+	wl_compositor_interface = (Interface*)dlsym(_wl_lib, "wl_compositor_interface");
+	wl_surface_interface = (Interface*)dlsym(_wl_lib, "wl_surface_interface");
+	wl_shell_interface = (Interface*)dlsym(_wl_lib, "wl_shell_interface");
+	wl_output_interface = (Interface*)dlsym(_wl_lib, "wl_output_interface");
+	wl_seat_interface = (Interface*)dlsym(_wl_lib, "wl_seat_interface");
+	wl_subcompositor_interface = (Interface*)dlsym(_wl_lib, "wl_subcompositor_interface");
+	wl_keyboard_interface = (Interface*)dlsym(_wl_lib, "wl_keyboard_interface");
+	wl_pointer_interface = (Interface*)dlsym(_wl_lib, "wl_pointer_interface");
 
-extern fn int rountrip(Display display) @extern("wl_display_roundtrip");
+	// Patch xdg_shell protocol type arrays with loaded interface pointers
+	get_xdg_surface[1] = wl_surface_interface;
+	get_popup[1] = wl_surface_interface;
+	show_window_menu[0] = wl_seat_interface;
+	move[0] = wl_seat_interface;
+	resize_edge[0] = wl_seat_interface;
+	set_fullscreen[0] = wl_output_interface;
+	grab[0] = wl_seat_interface;
+
+	return true;
+}
 
 
 fn void surface_commit(
@@ -280,7 +339,7 @@ fn Registry get_registry(
 ) => proxy_marshal_flags(
 	display,
 	WL_DISPLAY_GET_REGISTRY,
-	&wl_registry_interface,
+	wl_registry_interface,
 	1,
 	0,
 	null
@@ -294,12 +353,12 @@ enum SeatCapability : uint (uint value)
 	TOUCH    { 4 },
 }
 
-fn void removeRegistry(LinuxWindow* window, Registry registry, uint name)
+fn void removeRegistry(WaylandWindow* window, Registry registry, uint name)
 {
 	// window.open = false;
 }
 
-fn void shellPing(LinuxWindow* window, Shell shell, uint serial)
+fn void shellPing(WaylandWindow* window, Shell shell, uint serial)
 {
 	io::printfn("shell ping");
 	// Pong back the ping
@@ -307,7 +366,7 @@ fn void shellPing(LinuxWindow* window, Shell shell, uint serial)
 }
 
 fn void shellSurfaceConfigure(
-	LinuxWindow* window,
+	WaylandWindow* window,
 	XDG_surface surface,
 	uint serial
 )
@@ -322,14 +381,14 @@ fn void shellSurfaceConfigure(
 	);
 }
 
-fn void topSurfaceClose(LinuxWindow* data, XDG_top_level top_level)
+fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
 {
 	// Window closed
 	// data.open = false;
 }
 
 fn void topSurfaceConfigure(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	int width,
 	int height,
@@ -338,7 +397,7 @@ fn void topSurfaceConfigure(
 {
 }
 fn void topSurfaceBounds(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	int width,
 	int height
@@ -346,21 +405,21 @@ fn void topSurfaceBounds(
 {
 }
 fn void topSurfaceCapabilities(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	XDG_top_level top_level,
 	void* capabilities
 )
 {
 }
 
-fn void seatCapabilities(LinuxWindow* data, Seat seat, uint capabilities)
+fn void seatCapabilities(WaylandWindow* data, Seat seat, uint capabilities)
 {
 	if (capabilities & SeatCapability.KEYBOARD.value)
 	{
 		Keyboard keyboard = proxy_marshal_flags(
 			seat,
 			1,
-			&wl_keyboard_interface,
+			wl_keyboard_interface,
 			proxy_get_version(seat),
 			0,
 			null
@@ -373,7 +432,7 @@ fn void seatCapabilities(LinuxWindow* data, Seat seat, uint capabilities)
 		Pointer pointer = proxy_marshal_flags(
 			seat,
 			0,
-			&wl_pointer_interface,
+			wl_pointer_interface,
 			proxy_get_version(seat),
 			0,
 			null
@@ -382,16 +441,16 @@ fn void seatCapabilities(LinuxWindow* data, Seat seat, uint capabilities)
 	}
 }
 
-fn void seatName(LinuxWindow* data, Seat seat, char* name)
+fn void seatName(WaylandWindow* data, Seat seat, char* name)
 {
 	// io::printfn("seat %s", (ZString)name);
 }
 
-fn void kbMap(LinuxWindow* data, Keyboard kb, uint frmt, int fd, uint sz)
+fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint sz)
 {
 }
 fn void kbEnter(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint ser,
 	Surface surface,
@@ -399,7 +458,7 @@ fn void kbEnter(
 )
 {
 }
-fn void kbLeave(LinuxWindow* data, Keyboard kb, uint ser, Surface surface)
+fn void kbLeave(WaylandWindow* data, Keyboard kb, uint ser, Surface surface)
 {
 }
 fn void noop(
@@ -414,7 +473,7 @@ fn void noop(
 }
 
 fn void kbKey(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	void* kb,
 	uint serial,
 	uint type,
@@ -430,7 +489,7 @@ fn void kbKey(
 }
 
 fn void kbMod(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Keyboard kb,
 	uint serial,
 	uint dep,
@@ -440,12 +499,12 @@ fn void kbMod(
 )
 {
 }
-fn void kbRep(LinuxWindow* data, Keyboard kb, int rate, int del)
+fn void kbRep(WaylandWindow* data, Keyboard kb, int rate, int del)
 {
 }
 
 fn void pointerEnter(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	Surface surface,
@@ -455,7 +514,7 @@ fn void pointerEnter(
 {
 }
 fn void pointerLeave(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	Surface surface
@@ -464,7 +523,7 @@ fn void pointerLeave(
 }
 
 fn void pointerMotion(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	uint time,
 	int x,
@@ -475,7 +534,7 @@ fn void pointerMotion(
 }
 
 fn void pointerButton(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	int serial,
 	uint time,
@@ -503,7 +562,7 @@ fn void pointerButton(
 }
 
 fn void pointerAxis(
-	LinuxWindow* data,
+	WaylandWindow* data,
 	Pointer pointer,
 	uint time,
 	uint axis,
@@ -523,7 +582,7 @@ fn void pointerAxis(
 
 
 fn void handleRegistry(
-	LinuxWindow* window,
+	WaylandWindow* window,
 	Registry registry,
 	uint name,
 	char* interface_name,
@@ -536,13 +595,13 @@ fn void handleRegistry(
 	{
 		Compositor compositor = registry_bind(
 			registry,
-			&wl_compositor_interface,
+			wl_compositor_interface,
 			name,
 			version
 		);
 		window.surface = registry_bind(
 			compositor,
-			&wl_surface_interface,
+			wl_surface_interface,
 			name,
 			version
 		);
@@ -563,7 +622,7 @@ fn void handleRegistry(
 	{
 		window.seat = registry_bind(
 			registry,
-			&wl_seat_interface,
+			wl_seat_interface,
 			name,
 			version
 		);
@@ -609,10 +668,22 @@ PointerListener pointerListener = {
 	&noop
 };
 
-// Creates new XCB window
-fn Window? new(Params params, String name)
+// Test if Wayland is available
+fn bool wayland_available()
 {
-	LinuxWindow window = { .open = true, };
+	if (!wayland_load()) return false;
+	Display dpy = connect(null);
+	if (dpy) {
+		disconnect(dpy);
+		return true;
+	}
+	return false;
+}
+
+// Creates new Wayland window
+fn WaylandWindow? wayland_create(Params params, String name)
+{
+	WaylandWindow window = { .initialized = false, };
 
 	Display display = connect(null);
 	if (display == null) return FAILED_OPENING_WINDOW~;
@@ -699,54 +770,77 @@ fn Window? new(Params params, String name)
 	rountrip(display);
 	surface_commit(window.surface);
 
-	return { .src = window, .width = params.width, .height = params.height, };
+	window.initialized = true;
+	return window;
 }
 
-fn float[<2>] Window.getMousePos(self)
+fn float[<2>] wayland_getMousePos()
 {
 	return mouse_pos;
 }
 
-fn EventMap Window.getEvent(&self)
+fn void wayland_pollEvents(WaylandWindow* self)
 {
-	// Reset mouse scroll
+	// Reset mouse scroll on the global event map (where callbacks write)
 	event_map.set(MOUSE_SCROLL_UP, false);
 	event_map.set(MOUSE_SCROLL_DOWN, false);
-	dispatch(self.src.display);
-	return event_map;
+
+	// Non-blocking event dispatch
+	while (prepare_read(self.display) != 0)
+	{
+		dispatch_pending(self.display);
+	}
+	display_flush(self.display);
+
+	PollFd pfd = { .fd = display_get_fd(self.display), .events = POLLIN, .revents = 0 };
+	if (poll(&pfd, 1, 0) > 0)
+	{
+		read_events(self.display);
+	}
+	else
+	{
+		cancel_read(self.display);
+	}
+	dispatch_pending(self.display);
+}
+
+fn EventMap* wayland_getEventMap()
+{
+	return &event_map;
 }
 
 // Free and destroys window instance
-fn void Window.free(&self)
+fn void wayland_free(WaylandWindow* self)
 {
 	// proxy_destroy(self.src.keyboard);
 	proxy_marshal_flags(
-		self.src.seat,
+		self.seat,
 		3,
 		null,
-		proxy_get_version(self.src.seat),
+		proxy_get_version(self.seat),
 		WL_MARSHAL_FLAG_DESTROY
 	);
 	proxy_marshal_flags(
-		self.src.surface,
+		self.surface,
 		0,
 		null,
-		proxy_get_version(self.src.surface),
+		proxy_get_version(self.surface),
 		WL_MARSHAL_FLAG_DESTROY
 	);
 	proxy_marshal_flags(
-		self.src.xdg_surface,
+		self.xdg_surface,
 		0,
 		null,
-		proxy_get_version(self.src.surface),
+		proxy_get_version(self.surface),
 		WL_MARSHAL_FLAG_DESTROY
 	);
 	proxy_marshal_flags(
-		self.src.top_level,
+		self.top_level,
 		0,
 		null,
-		proxy_get_version(self.src.surface),
+		proxy_get_version(self.surface),
 		WL_MARSHAL_FLAG_DESTROY
 	);
-	disconnect(self.src.display);
+	disconnect(self.display);
+	self.initialized = false;
 }

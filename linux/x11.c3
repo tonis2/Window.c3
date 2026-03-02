@@ -1,103 +1,101 @@
-module c3w @if(env::LINUX && $feature ( X11 )) @link("X11", "xcb");
+module c3w @if(env::LINUX);
 import std::math;
 
 import std::io;
 import std::core::types;
 
-alias Display = void*;
+alias X11Display = void*;
 alias Connection = void*;
 alias XCB_Window = void*;
 alias XCB_setup = void*;
 
-struct LinuxWindow
+struct X11Window
 {
-	Display display;
+	X11Display display;
 	Connection connection;
 	XCB_Window window;
 	EventMap event_map;
 	uint display_width;
 	uint display_height;
+	bool initialized;
 }
 
-extern fn Display openDisplay(char* name) @extern("XOpenDisplay");
+// Function pointer types for dynamic loading
+alias FnOpenDisplay = fn X11Display(char* name);
+alias FnXCloseDisplay = fn void(X11Display);
+alias FnXcbConnect = fn Connection(char* name, uint* window);
+alias FnXcbGetSetup = fn XCB_setup(Connection);
+alias FnXcbRootsIterator = fn XScreenIterator*(XCB_setup);
+alias FnXcbGenerateId = fn XCB_Window(XCB_setup);
+alias FnXcbMapWindow = fn XCB_Window(Connection, XCB_Window);
+alias FnXcbFlush = fn XCB_Window(Connection);
+alias FnXcbPollForEvent = fn KeyPressEvent*(Connection);
+alias FnXcbWaitForEvent = fn KeyPressEvent*(Connection);
+alias FnXcbChangeProperty = fn void(Connection, XcbProp, XCB_Window, uint, uint, uint, uint, char*);
+alias FnXcbQueryPointer = fn uint(Connection, XCB_Window);
+alias FnXcbQueryPointerReply = fn KeyPressEvent*(Connection, uint, void*);
+alias FnXcbDestroyWindow = fn uint(Connection, XCB_Window);
+alias FnXcbDisconnect = fn uint(Connection);
+alias FnXcbCreateWindow = fn uint(Connection, char, XCB_Window, uint, short, short, ushort, ushort, ushort, ushort, uint, uint, void*);
 
-extern fn Connection xcbConnect(
-	char* name,
-	uint* window
-) @extern("xcb_connect");
+// Function pointers loaded at runtime via dlsym
+FnOpenDisplay openDisplay;
+FnXCloseDisplay x_close_display;
+FnXcbConnect xcbConnect;
+FnXcbGetSetup xcbGetSetup;
+FnXcbRootsIterator xcbRootsIterator;
+FnXcbGenerateId xcbWindowId;
+FnXcbMapWindow xcbMapWindow;
+FnXcbFlush xcbFlush;
+FnXcbPollForEvent xcbPollEvent;
+FnXcbPollForEvent xcbPollQueuedEvent;
+FnXcbWaitForEvent xcbWaitForEvent;
+FnXcbChangeProperty xcbChangeProperty;
+FnXcbQueryPointer xcbQueryPointer;
+FnXcbQueryPointerReply xcbQueryPointerReply;
+FnXcbDestroyWindow xcbDestroy;
+FnXcbDisconnect xcbDisconnect;
+FnXcbCreateWindow createWindow;
 
-extern fn XCB_setup xcbGetSetup(Connection connection) @extern("xcb_get_setup");
+// Library handles
+void* _x11_lib;
+void* _xcb_lib;
 
-extern fn XScreenIterator* xcbRootsIterator(
-	XCB_setup setup
-) @extern("xcb_setup_roots_iterator");
+fn bool x11_load()
+{
+	if (_x11_lib) return true;
 
-extern fn XCB_Window xcbWindowId(XCB_setup setup) @extern("xcb_generate_id");
+	_x11_lib = dlopen("libX11.so.6", RTLD_LAZY);
+	if (!_x11_lib) return false;
 
-extern fn XCB_Window xcbMapWindow(
-	Connection con,
-	XCB_Window win
-) @extern("xcb_map_window");
+	_xcb_lib = dlopen("libxcb.so.1", RTLD_LAZY);
+	if (!_xcb_lib)
+	{
+		dlclose(_x11_lib);
+		_x11_lib = null;
+		return false;
+	}
 
-extern fn XCB_Window xcbFlush(Connection con) @extern("xcb_flush");
+	openDisplay = (FnOpenDisplay)dlsym(_x11_lib, "XOpenDisplay");
+	x_close_display = (FnXCloseDisplay)dlsym(_x11_lib, "XCloseDisplay");
+	xcbConnect = (FnXcbConnect)dlsym(_xcb_lib, "xcb_connect");
+	xcbGetSetup = (FnXcbGetSetup)dlsym(_xcb_lib, "xcb_get_setup");
+	xcbRootsIterator = (FnXcbRootsIterator)dlsym(_xcb_lib, "xcb_setup_roots_iterator");
+	xcbWindowId = (FnXcbGenerateId)dlsym(_xcb_lib, "xcb_generate_id");
+	xcbMapWindow = (FnXcbMapWindow)dlsym(_xcb_lib, "xcb_map_window");
+	xcbFlush = (FnXcbFlush)dlsym(_xcb_lib, "xcb_flush");
+	xcbPollEvent = (FnXcbPollForEvent)dlsym(_xcb_lib, "xcb_poll_for_event");
+	xcbPollQueuedEvent = (FnXcbPollForEvent)dlsym(_xcb_lib, "xcb_poll_for_queued_event");
+	xcbWaitForEvent = (FnXcbWaitForEvent)dlsym(_xcb_lib, "xcb_wait_for_event");
+	xcbChangeProperty = (FnXcbChangeProperty)dlsym(_xcb_lib, "xcb_change_property");
+	xcbQueryPointer = (FnXcbQueryPointer)dlsym(_xcb_lib, "xcb_query_pointer");
+	xcbQueryPointerReply = (FnXcbQueryPointerReply)dlsym(_xcb_lib, "xcb_query_pointer_reply");
+	xcbDestroy = (FnXcbDestroyWindow)dlsym(_xcb_lib, "xcb_destroy_window");
+	xcbDisconnect = (FnXcbDisconnect)dlsym(_xcb_lib, "xcb_disconnect");
+	createWindow = (FnXcbCreateWindow)dlsym(_xcb_lib, "xcb_create_window");
 
-extern fn KeyPressEvent* xcbPollEvent(
-	Connection con
-) @extern("xcb_poll_for_event");
-
-extern fn KeyPressEvent* xcbPollQueuedEvent(
-	Connection con
-) @extern("xcb_poll_for_queued_event");
-
-extern fn KeyPressEvent* xcbWaitForEvent(
-	Connection con
-) @extern("xcb_wait_for_event");
-
-extern fn void xcbChangeProperty(
-	Connection con,
-	XcbProp mode,
-	XCB_Window window,
-	uint,
-	uint,
-	uint format,
-	uint size,
-	char* name
-) @extern("xcb_change_property");
-
-extern fn uint xcbQueryPointer(
-	Connection con,
-	XCB_Window window
-) @extern("xcb_query_pointer");
-
-extern fn KeyPressEvent* xcbQueryPointerReply(
-	Connection con,
-	uint cookie,
-	void* err
-) @extern("xcb_query_pointer_reply");
-
-extern fn uint xcbDestroy(
-	Connection con,
-	XCB_Window window
-) @extern("xcb_destroy_window");
-
-extern fn uint xcbDisconnect(Connection con) @extern("xcb_disconnect");
-
-
-extern fn uint createWindow(
-	Connection c,
-	char depth,
-	XCB_Window window,
-	uint parent,
-	short x,
-	short y,
-	ushort width,
-	ushort height,
-	ushort border_width,
-	ushort _class,
-	uint visual,
-	uint value_mask,
-	void* value_list
-) @extern("xcb_create_window");
+	return true;
+}
 
 
 enum XcbProp : uint (uint value)
@@ -175,10 +173,23 @@ struct KeyPressEvent
 	char same_screen;
 }
 
-// Creates new XCB window
-fn Window? new(Params params, String name)
+// Test if X11 is available
+fn bool x11_available()
 {
-	Display dpy = openDisplay(null);
+	if (!x11_load()) return false;
+	X11Display dpy = openDisplay(null);
+	if (dpy) {
+		// Don't leak the display, just checking
+		x_close_display(dpy);
+		return true;
+	}
+	return false;
+}
+
+// Creates new XCB window
+fn X11Window? x11_create(Params params, String name)
+{
+	X11Display dpy = openDisplay(null);
 
 	if (!dpy)
 	{
@@ -234,27 +245,24 @@ fn Window? new(Params params, String name)
 		name.len,
 		name
 	);
-	Window response = {
-		.src = {
-			.window = window,
-			.connection = connection,
-			.display = dpy,
-			.display_width = screen_iterator.data.width_in_pixels,
-			.display_height = screen_iterator.data.height_in_pixels
-		},
-		.width = params.width,
-		.height = params.height,
+	X11Window response = {
+		.window = window,
+		.connection = connection,
+		.display = dpy,
+		.display_width = screen_iterator.data.width_in_pixels,
+		.display_height = screen_iterator.data.height_in_pixels,
+		.initialized = true,
 	};
 
 	return response;
 }
 
-fn float[<2>] Window.getMousePos(self)
+fn float[<2>] x11_getMousePos(X11Window* self)
 {
 	void* err;
 	KeyPressEvent* mouse_pos = xcbQueryPointerReply(
-		self.src.connection,
-		xcbQueryPointer(self.src.connection, self.src.window),
+		self.connection,
+		xcbQueryPointer(self.connection, self.window),
 		&err
 	);
 	float[<2>] response = { mouse_pos.root_x, mouse_pos.root_y };
@@ -263,10 +271,9 @@ fn float[<2>] Window.getMousePos(self)
 	return response;
 }
 
-fn EventMap Window.getEvent(&self)
+fn void x11_pollEvents(X11Window* self, EventMap* event_map)
 {
-	KeyPressEvent* event = xcbPollEvent(self.src.connection);
-	Event event_response;
+	KeyPressEvent* event = xcbPollEvent(self.connection);
 	defer free(event);
 
 	if (event != null)
@@ -279,12 +286,12 @@ fn EventMap Window.getEvent(&self)
 			case KEY_RELEASED:
 			case MOUSE_RELEASED:
 				{
-					self.src.event_map.set(key, false);
+					event_map.set(key, false);
 				}
 			case KEY_PRESSED:
 			case MOUSE_PRESSED:
 				{
-					self.src.event_map.set(key, true);
+					event_map.set(key, true);
 					break;
 				}
 			default:
@@ -292,13 +299,12 @@ fn EventMap Window.getEvent(&self)
 				};
 		}
 	}
-
-	return self.src.event_map;
 }
 
 // Free and destroys window instance
-fn void Window.free(self)
+fn void x11_free(X11Window* self)
 {
-	xcbDestroy(self.src.connection, self.src.window);
-	xcbDisconnect(self.src.connection);
+	xcbDestroy(self.connection, self.window);
+	xcbDisconnect(self.connection);
+	self.initialized = false;
 }
