@@ -5,7 +5,7 @@
 	"version": "0.1.2",
 	"script-dir": "./",
 	"dependency-search-paths": ["./"],
-	"sources": ["darwin/**", "linux/**", "win32/**", "main.c3"],
+	"sources": ["darwin/**", "linux/**", "win32/**", "wasm/**", "main.c3"],
 	"linked-libraries": [],
 	"features": [],
 	"targets": {
@@ -21,6 +21,16 @@
 			"target": "windows-x64",
 			"winsdk": "/home/tonis/.xwin/lib",
 			"dependencies": []
+		},
+		"test-wasm": {
+			"type": "executable",
+			"sources": ["./test/main_web.c3"],
+			"target": "wasm32",
+			"link-libc": false,
+			"no-entry": true,
+			"reloc": "none",
+			"debug-info": "none",
+			"output": "./test/web"
 		},
 		"zip": {
 			"type": "prepare",

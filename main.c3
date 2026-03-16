@@ -8,6 +8,7 @@ struct Window {
     DarwinWindow src @if(env::os_is_darwin());
 	LinuxWindow src @if(env::LINUX);
     Win32Window src @if(env::WIN32);
+    WasmWindow src @if(env::WASM);
     float width;
     float height;
 }

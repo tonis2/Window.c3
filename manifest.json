@@ -13,6 +13,10 @@
     "windows-x64" : {
       "sources": ["win32/main.c3", "main.c3"],
       "linked-libraries" : ["user32.lib", "gdi32.lib", "kernel32.lib"]
+    },
+    "wasm32" : {
+      "sources": ["wasm/main.c3", "main.c3"],
+      "linked-libraries" : []
     }
   }
 }
