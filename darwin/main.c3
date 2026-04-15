@@ -39,9 +39,7 @@ fn Window? new(Params params, String name)
 	NSWindow win = new_object("NSWindow");
 	win.alloc();
 
-	ulong window_style = WindowStyleMask.CLOSABLE.val
-		| WindowStyleMask.MINIATURIZABLE.val
-		| BackingStore.BUFFERED.val
+	ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val
 		| WindowStyleMask.TITLED.val
 		| WindowStyleMask.RESIZABLE.val;
 	win.initWithContentRect(
@@ -57,17 +55,8 @@ fn Window? new(Params params, String name)
 
 	NSObject delegate = new_object("NSObject");
 	delegate.alloc_class_pair("WindowDelegate", 0);
-	delegate.add_ivar(
-		"NSWindow",
-		$sizeof (win),
-		math::log2($sizeof (win)),
-		"L"
-	)!!;
-	delegate.add_method(
-		"windowWillResize:toSize:",
-		&resize_window,
-		"{NSSize=ff}@:{NSSize=ff}"
-	)!!;
+	delegate.add_ivar("NSWindow", $sizeof(win), math::log2($sizeof(win)), "L")!!;
+	delegate.add_method("windowWillResize:toSize:", &resize_window, "{NSSize=ff}@:{NSSize=ff}")!!;
 	// delegate.add_method("windowDidMiniaturize::", &resize_window, "")!!;
 	// delegate.add_method("windowDidDeminiaturize::", &resize_window, "")!!;
 
@@ -124,12 +113,7 @@ fn EventMap Window.getEvent(&self)
 	NSDate until;
 	// NSDate until = objc::new("NSDate");
 	// until.distantFuture();
-	NSEvent event = self.src.app.nextEventMatchingMask(
-		long.max,
-		until,
-		loop,
-		true
-	);
+	NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
 	int type = event.get_type();
 
 	self.src.event_map.set(MOUSE_SCROLL_UP, true);
@@ -137,10 +121,7 @@ fn EventMap Window.getEvent(&self)
 
 	if (type != 0)
 	{
-		DarwinEventType? event_type_opt = DarwinEventType.lookup_field(
-			value,
-			type
-		);
+		DarwinEventType? event_type_opt = DarwinEventType.lookup_field(value, type);
 		if (catch event_type_opt)
 		{
 			self.src.window.sendEvent(event);
@@ -222,41 +203,41 @@ fn void Window.free(&self)
 // macOS NSEvent types (for internal use)
 enum DarwinEventType : uint (uint value)
 {
-	EMPTY_KEY            { 0 },
-	LEFT_MOUSE_DOWN      { 1 },
-	LEFT_MOUSE_UP        { 2 },
-	RIGHT_MOUSE_DOWN     { 3 },
-	RIGHT_MOUSE_UP       { 4 },
-	MOUSE_MOVED          { 5 },
-	LEFT_MOUSE_DRAGGED   { 6 },
-	RIGHT_MOUSE_DRAGGED  { 7 },
-	MOUSE_ENTERED        { 8 },
-	MOUSE_EXITED         { 9 },
-	KEY_PRESSED          { 10 },
-	KEY_RELEASED         { 11 },
-	FLAGS_CHANGED        { 12 },
-	APPKIT_DEFINED       { 13 },
-	SYSTEM_DEFINED       { 14 },
-	APPLICATION_DEFINED  { 15 },
-	PERIODIC             { 16 },
-	CURSOR_UPDATE        { 17 },
-	SCROLL_WHEEL         { 22 },
-	TABLET_POINT         { 23 },
-	TABLET_PROXIMITY     { 24 },
-	OTHER_MOUSE_DOWN     { 25 },
-	OTHER_MOUSE_UP       { 26 },
-	OTHER_MOUSE_DRAGGED  { 27 },
-	GESTURE              { 29 },
-	MAGNIFY              { 30 },
-	SWIPE                { 31 },
-	ROTATE               { 18 },
-	BEGIN_GESTURE        { 19 },
-	END_GESTURE          { 20 },
-	SMART_MAGNIFY        { 32 },
-	QUICK_LOOK           { 33 },
-	PRESSURE             { 34 },
-	DIRECT_TOUCH         { 37 },
-	CHANGE_MODE          { 38 },
+	EMPTY_KEY           { 0 },
+	LEFT_MOUSE_DOWN     { 1 },
+	LEFT_MOUSE_UP       { 2 },
+	RIGHT_MOUSE_DOWN    { 3 },
+	RIGHT_MOUSE_UP      { 4 },
+	MOUSE_MOVED         { 5 },
+	LEFT_MOUSE_DRAGGED  { 6 },
+	RIGHT_MOUSE_DRAGGED { 7 },
+	MOUSE_ENTERED       { 8 },
+	MOUSE_EXITED        { 9 },
+	KEY_PRESSED         { 10 },
+	KEY_RELEASED        { 11 },
+	FLAGS_CHANGED       { 12 },
+	APPKIT_DEFINED      { 13 },
+	SYSTEM_DEFINED      { 14 },
+	APPLICATION_DEFINED { 15 },
+	PERIODIC            { 16 },
+	CURSOR_UPDATE       { 17 },
+	SCROLL_WHEEL        { 22 },
+	TABLET_POINT        { 23 },
+	TABLET_PROXIMITY    { 24 },
+	OTHER_MOUSE_DOWN    { 25 },
+	OTHER_MOUSE_UP      { 26 },
+	OTHER_MOUSE_DRAGGED { 27 },
+	GESTURE             { 29 },
+	MAGNIFY             { 30 },
+	SWIPE               { 31 },
+	ROTATE              { 18 },
+	BEGIN_GESTURE       { 19 },
+	END_GESTURE         { 20 },
+	SMART_MAGNIFY       { 32 },
+	QUICK_LOOK          { 33 },
+	PRESSURE            { 34 },
+	DIRECT_TOUCH        { 37 },
+	CHANGE_MODE         { 38 },
 }
 
 // Convert macOS keycode to unified EventKey

@@ -12,14 +12,13 @@
 		"test": {
 			"type": "executable",
 			"sources": ["./test/main.c3"],
-			"features": ["WAYLAND"],
+			"features": [],
 			"dependencies": []
 		},
 		"test-win": {
 			"type": "executable",
 			"sources": ["./test/main.c3"],
 			"target": "windows-x64",
-			"winsdk": "/home/tonis/.xwin/lib",
 			"dependencies": []
 		},
 		"test-wasm": {
@@ -28,8 +27,6 @@
 			"target": "wasm32",
 			"link-libc": false,
 			"no-entry": true,
-			"reloc": "none",
-			"debug-info": "none",
 			"output": "./test/web"
 		},
 		"zip": {

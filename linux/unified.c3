@@ -12,8 +12,8 @@ extern fn void* dlsym(void* handle, char* symbol) @extern("dlsym");
 extern fn int dlclose(void* handle) @extern("dlclose");
 
 
-const int RTLD_LAZY = 1;
-const int RTLD_NOW = 2;
+const int RTLD_LAZY   = 1;
+const int RTLD_NOW    = 2;
 const int RTLD_GLOBAL = 256;
 
 enum BackendType

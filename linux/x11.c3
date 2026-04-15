@@ -36,7 +36,21 @@ alias FnXcbQueryPointer = fn uint(Connection, XCB_Window);
 alias FnXcbQueryPointerReply = fn KeyPressEvent*(Connection, uint, void*);
 alias FnXcbDestroyWindow = fn uint(Connection, XCB_Window);
 alias FnXcbDisconnect = fn uint(Connection);
-alias FnXcbCreateWindow = fn uint(Connection, char, XCB_Window, uint, short, short, ushort, ushort, ushort, ushort, uint, uint, void*);
+alias FnXcbCreateWindow = fn uint(
+	Connection,
+	char,
+	XCB_Window,
+	uint,
+	short,
+	short,
+	ushort,
+	ushort,
+	ushort,
+	ushort,
+	uint,
+	uint,
+	void*
+);
 
 // Function pointers loaded at runtime via dlsym
 FnOpenDisplay openDisplay;
@@ -107,16 +121,16 @@ enum XcbProp : uint (uint value)
 
 enum XcbEventMask : uint (uint value)
 {
-	CW_EVENT_MASK              { 2048 },
-	BACK_PIXEL                 { 2 },
-	CW_CURSOR                  { 16384 },
-	EVENT_MASK_NO_EVENT        { 0 },
-	EVENT_MASK_EXPOSURE        { 32768 },
-	EVENT_MASK_BUTTON_PRESS    { 4 },
-	EVENT_MASK_BUTTON_RELEASE  { 8 },
-	EVENT_MASK_KEY_PRESS       { 1 },
-	EVENT_MASK_KEY_RELEASE     { 2 },
-	EVENT_MASK_POINTER_MOTION  { 64 },
+	CW_EVENT_MASK                  { 2048 },
+	BACK_PIXEL                     { 2 },
+	CW_CURSOR                      { 16384 },
+	EVENT_MASK_NO_EVENT            { 0 },
+	EVENT_MASK_EXPOSURE            { 32768 },
+	EVENT_MASK_BUTTON_PRESS        { 4 },
+	EVENT_MASK_BUTTON_RELEASE      { 8 },
+	EVENT_MASK_KEY_PRESS           { 1 },
+	EVENT_MASK_KEY_RELEASE         { 2 },
+	EVENT_MASK_POINTER_MOTION      { 64 },
 	EVENT_MASK_POINTER_MOTION_HINT { 128 },
 	EVENT_MASK_STRUCTURE_NOTIFY    { 131072 },
 	EVENT_MASK_VISIBILITY_CHANGE   { 65536 },
@@ -178,7 +192,8 @@ fn bool x11_available()
 {
 	if (!x11_load()) return false;
 	X11Display dpy = openDisplay(null);
-	if (dpy) {
+	if (dpy)
+	{
 		// Don't leak the display, just checking
 		x_close_display(dpy);
 		return true;
@@ -203,12 +218,10 @@ fn X11Window? x11_create(Params params, String name)
 
 	XCB_Window window = xcbWindowId(connection);
 
-	uint mask = XcbEventMask.BACK_PIXEL.value
-		| XcbEventMask.CW_EVENT_MASK.value;
+	uint mask = XcbEventMask.BACK_PIXEL.value | XcbEventMask.CW_EVENT_MASK.value;
 	uint[] event_masks = {
 		screen_iterator.data.black_pixel,
-		XcbEventMask.EVENT_MASK_EXPOSURE.value
-			| XcbEventMask.EVENT_MASK_KEY_PRESS.value
+		XcbEventMask.EVENT_MASK_EXPOSURE.value | XcbEventMask.EVENT_MASK_KEY_PRESS.value
 			| XcbEventMask.EVENT_MASK_KEY_RELEASE.value
 			| XcbEventMask.EVENT_MASK_BUTTON_PRESS.value
 			| XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value
@@ -235,16 +248,7 @@ fn X11Window? x11_create(Params params, String name)
 
 	// Change window name
 	// XCB_ATOM_WM_NAME, XCB_ATOM_STRING
-	xcbChangeProperty(
-		connection,
-		XcbProp.PROP_MODE_REPLACE,
-		window,
-		39,
-		31,
-		8,
-		name.len,
-		name
-	);
+	xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, 39, 31, 8, name.len, name);
 	X11Window response = {
 		.window = window,
 		.connection = connection,
