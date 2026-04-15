@@ -6,14 +6,7 @@ import std::math;
 
 alias SendBool = fn void*(void*, ObjcSelector, bool);
 alias SendContentRec = fn void*(void*, ObjcSelector, NSRect, long, long, bool);
-alias SendDequeueEvent = fn void*(
-	void*,
-	ObjcSelector,
-	long,
-	void*,
-	ObjcId,
-	bool
-);
+alias SendDequeueEvent = fn void*(void*, ObjcSelector, long, void*, ObjcId, bool);
 alias SendDouble = fn void*(void*, ObjcSelector, double);
 alias SendEvent = fn void*(void*, ObjcSelector, NSEvent);
 alias SendId = fn void*(void*, ObjcSelector, ObjcId);
@@ -65,20 +58,12 @@ fn NSObject new_object(ZString cls_name = "NSObject")
 
 macro NSObject.call(&self, $FunctionType, ZString $selector, ...)
 {
-	return (($FunctionType)&objc::msgSend)(
-		(ObjcId)self.id,
-		objc::sel_getUid($selector),
-		$vasplat
-	);
+	return (($FunctionType)&objc::msgSend)((ObjcId)self.id, objc::sel_getUid($selector), $vasplat);
 }
 
 macro ObjcId.call(ObjcId self, $FunctionType, ZString $selector, ...)
 {
-	return (($FunctionType)&objc::msgSend)(
-		self,
-		objc::sel_getUid($selector),
-		$vasplat
-	);
+	return (($FunctionType)&objc::msgSend)(self, objc::sel_getUid($selector), $vasplat);
 }
 
 fn void NSObject.alloc_class_pair(&self, ZString name, uint extra_bytes)
@@ -111,13 +96,7 @@ fn void NSApplication.activateIgnoringOtherApps(&self, bool flag)
 	objc::msg_send(self.id, SendBool, "activateIgnoringOtherApps:", flag);
 }
 
-fn NSEvent NSApplication.nextEventMatchingMask(
-	&self,
-	long mask,
-	NSDate until_date,
-	NSObject in_mode,
-	bool dequeue
-)
+fn NSEvent NSApplication.nextEventMatchingMask(&self, long mask, NSDate until_date, NSObject in_mode, bool dequeue)
 {
 	return (NSEvent)objc::msg_send(
 		self.id,
@@ -145,22 +124,14 @@ fn void NSApplication.sendEvent(&self, NSEvent event)
 	objc::msg_send(self.id, SendEvent, "sendEvent:", event);
 }
 
-fn void NSApplication.setActivationPolicy(
-	&self,
-	ApplicationActivationPolicy policy
-)
+fn void NSApplication.setActivationPolicy(&self, ApplicationActivationPolicy policy)
 {
 	objc::msg_send(self.id, SendInt, "setActivationPolicy:", policy.val);
 }
 
 fn void NSImage.initWithContentsOfFile(&self, NSString str)
 {
-	self.id = objc::msg_send(
-		self.id,
-		SendId,
-		"initWithContentsOfFile:",
-		str.id
-	);
+	self.id = objc::msg_send(self.id, SendId, "initWithContentsOfFile:", str.id);
 }
 
 fn void NSImage.setSize(&self, NSSize size)
@@ -181,12 +152,7 @@ fn void NSValue.valueWithPointer(&self, void* ptr)
 
 fn void NSString.stringWithUTF8String(&self, ZString str)
 {
-	self.id = objc::msg_send(
-		self.cls,
-		SendString,
-		"stringWithUTF8String:",
-		str
-	);
+	self.id = objc::msg_send(self.cls, SendString, "stringWithUTF8String:", str);
 }
 
 fn void NSDate.distantFuture(&self)
@@ -200,13 +166,7 @@ fn void NSDate.distantPast(&self)
 }
 
 
-fn void NSWindow.initWithContentRect(
-	&self,
-	NSRect rect,
-	ulong style_mask,
-	ulong backing,
-	bool is_defer
-)
+fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong backing, bool is_defer)
 {
 	self.id = objc::msg_send(
 		self.id,
@@ -240,53 +200,21 @@ fn void NSObject.release(&self)
 	objc::msg_send(self.id, SendVoid, "release");
 }
 
-macro NSObject? NSObject.add_method(
-	NSObject self,
-	ZString name,
-	void* imp,
-	ZString types = ""
-)
+macro NSObject? NSObject.add_method(NSObject self, ZString name, void* imp, ZString types = "")
 {
-	if (!objc::class_addMethod(
-		self.cls,
-		objc::sel_registerName(name),
-		imp,
-		types
-	)) return METHOD_NOT_SET~;
+	if (!objc::class_addMethod(self.cls, objc::sel_registerName(name), imp, types)) return METHOD_NOT_SET~;
 	return self;
 }
 
-macro ObjcClass? ObjcClass.add_method(
-	ObjcClass self,
-	ZString name,
-	void* imp,
-	ZString types = ""
-)
+macro ObjcClass? ObjcClass.add_method(ObjcClass self, ZString name, void* imp, ZString types = "")
 {
-	if (!objc::class_addMethod(
-		self,
-		register_name(name),
-		imp,
-		types
-	)) return METHOD_NOT_SET~;
+	if (!objc::class_addMethod(self, register_name(name), imp, types)) return METHOD_NOT_SET~;
 	return self;
 }
 
-macro NSObject? NSObject.add_ivar(
-	NSObject self,
-	ZString name,
-	int size,
-	double alignment,
-	ZString types
-)
+macro NSObject? NSObject.add_ivar(NSObject self, ZString name, int size, double alignment, ZString types)
 {
-	if (!objc::class_addIvar(
-		self.cls,
-		name,
-		size,
-		alignment,
-		types
-	)) return IVAR_NOT_SET~;
+	if (!objc::class_addIvar(self.cls, name, size, alignment, types)) return IVAR_NOT_SET~;
 	return self;
 }
 
@@ -297,56 +225,30 @@ macro ObjcIvar? ObjcId.get_ivar(ObjcId self, ZString name)
 	return out;
 }
 
-macro void NSObject.setInstanceVariable(
-	NSObject self,
-	ZString name,
-	NSObject out
-)
+macro void NSObject.setInstanceVariable(NSObject self, ZString name, NSObject out)
 {
 	objc::setInstanceVariable(self.id, name, out.id);
 }
 
-fn NSPoint NSEvent.locationInWindow(
-	self
-) => objc::msg_send(self, GetPoint, "locationInWindow");
+fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
 fn int NSEvent.get_type(self) => objc::msg_send(self, GetInt, "type");
 fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
-fn int NSEvent.get_scroll(
-	self
-) => objc::msg_send(self, GetInt, "scrollingDeltaY");
+fn int NSEvent.get_scroll(self) => objc::msg_send(self, GetInt, "scrollingDeltaY");
 fn double NSEvent.get_delta(self) => objc::msg_send(self, GetDouble, "deltaY");
 
-fn NSString NSEvent.get_characters(
-	self
-) => objc::msg_send(self, GetCharacters, "characters");
-fn int NSEvent.get_modifierFlags(
-	self
-) => objc::msg_send(self, GetInt, "modifierFlags");
+fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
+fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 // fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
 
-fn void NSView.wants_Layer(
-	self,
-	bool value
-) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);
-fn void NSView.set_layer(
-	self,
-	CALayer layer
-) => objc::msg_send(self.id, SendId, "setLayer:", layer.id);
+fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);
+fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId, "setLayer:", layer.id);
 
-fn void NSWindow.set_view(
-	&self,
-	NSView view
-) => objc::msg_send(self.id, SendId, "contentView", view.id);
-fn NSPoint NSWindow.get_mouse_pos(
-	&self
-) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
+fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
+fn NSPoint NSWindow.get_mouse_pos(&self) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
 
 fn NSView NSWindow.get_view(&self)
 {
-	return {
-		.cls = objc::getClass("NSView"),
-		.id = objc::msg_send(self.id, GetID, "contentView")
-	};
+	return { .cls = objc::getClass("NSView"), .id = objc::msg_send(self.id, GetID, "contentView") };
 }
 
 struct NSPoint

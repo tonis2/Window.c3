@@ -4,106 +4,28 @@ import std::io;
 import std::core::types;
 
 
-alias GlobalEvent = fn void(
-	WaylandWindow* data,
-	void* wl_registry,
-	uint name,
-	char* iface,
-	uint ver
-);
+alias GlobalEvent = fn void(WaylandWindow* data, void* wl_registry, uint name, char* iface, uint ver);
 alias RemoveEvent = fn void(WaylandWindow* data, void* wl_registry, uint name);
 alias ShellPing = fn void(WaylandWindow* data, Shell shell, uint serial);
-alias SeatCapabilitiesEvent = fn void(
-	WaylandWindow* data,
-	void* wl_registry,
-	uint capabilities
-);
+alias SeatCapabilitiesEvent = fn void(WaylandWindow* data, void* wl_registry, uint capabilities);
 alias SeatNameEvent = fn void(WaylandWindow* data, void* wl_registry, char* name);
 
-alias KBmapEvent = fn void(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint frmt,
-	int fd,
-	uint sz
-);
-alias KBenterEvent = fn void(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint ser,
-	Surface surface,
-	WLArray* keys
-);
-alias KBleaveEvent = fn void(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint ser,
-	Surface surface
-);
-alias KBkeyEvent = fn void(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint serial,
-	uint type,
-	uint key,
-	uint state
-);
-alias KBmodEvent = fn void(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint serial,
-	uint dep,
-	uint lat,
-	uint lock,
-	uint group
-);
+alias KBmapEvent = fn void(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint sz);
+alias KBenterEvent = fn void(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys);
+alias KBleaveEvent = fn void(WaylandWindow* data, Keyboard kb, uint ser, Surface surface);
+alias KBkeyEvent = fn void(WaylandWindow* data, Keyboard kb, uint serial, uint type, uint key, uint state);
+alias KBmodEvent = fn void(WaylandWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group);
 alias KBrepEvent = fn void(WaylandWindow* data, Keyboard kb, int rate, int del);
 
-alias PointerEnter = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	Surface surface,
-	int x,
-	int y
-);
-alias PointerLeave = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	Surface surface
-);
-alias PointerMotion = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	uint time,
-	int x,
-	int y
-);
-alias PointerButton = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	uint time,
-	uint button,
-	uint state
-);
-alias PointerAxis = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	uint time,
-	uint axis,
-	int value
-);
+alias PointerEnter = fn void(WaylandWindow* data, Pointer pointer, int serial, Surface surface, int x, int y);
+alias PointerLeave = fn void(WaylandWindow* data, Pointer pointer, int serial, Surface surface);
+alias PointerMotion = fn void(WaylandWindow* data, Pointer pointer, uint time, int x, int y);
+alias PointerButton = fn void(WaylandWindow* data, Pointer pointer, int serial, uint time, uint button, uint state);
+alias PointerAxis = fn void(WaylandWindow* data, Pointer pointer, uint time, uint axis, int value);
 alias PointerFrame = fn void(WaylandWindow* data, Pointer pointer);
 alias PointerAxisSrc = fn void(WaylandWindow* data, Pointer pointer, uint source);
 alias PointerAxisStop = fn void(WaylandWindow* data, Pointer pointer, uint axis);
-alias PointerAxisValue = fn void(
-	WaylandWindow* data,
-	Pointer pointer,
-	uint axis,
-	int value
-);
+alias PointerAxisValue = fn void(WaylandWindow* data, Pointer pointer, uint axis, int value);
 
 alias Noop = fn void();
 
@@ -119,14 +41,20 @@ alias Keyboard = void*;
 alias Pointer = void*;
 
 
+alias Shm = void*;
+alias ShmPool = void*;
+alias Buffer = void*;
+
 struct WaylandWindow
 {
 	Display display;
 	Surface surface;
 	Shell shell;
 	Seat seat;
+	Shm shm;
 	XDG_surface xdg_surface;
 	XDG_top_level top_level;
+	Buffer buffer;
 	bool initialized;
 	EventMap event_map;
 	float[<2>] mouse_pos;
@@ -208,7 +136,7 @@ struct Interface
 }
 
 const uint WL_DISPLAY_GET_REGISTRY = 1;
-const uint WL_REGISTRY_BIND = 0;
+const uint WL_REGISTRY_BIND        = 0;
 const uint WL_MARSHAL_FLAG_DESTROY = 1 << 0;
 
 // Function pointer types for dynamic loading
@@ -263,6 +191,21 @@ Interface* wl_seat_interface;
 Interface* wl_subcompositor_interface;
 Interface* wl_keyboard_interface;
 Interface* wl_pointer_interface;
+Interface* wl_shm_interface;
+Interface* wl_shm_pool_interface;
+Interface* wl_buffer_interface;
+
+// POSIX syscalls for shared memory
+extern fn int memfd_create(char* name, uint flags) @extern("memfd_create");
+extern fn int ftruncate(int fd, usz length) @extern("ftruncate");
+extern fn void* mmap(void* addr, usz length, int prot, int flags, int fd, long offset) @extern("mmap");
+extern fn int munmap(void* addr, usz length) @extern("munmap");
+extern fn int close_fd(int fd) @extern("close");
+
+const int PROT_READ = 1;
+const int PROT_WRITE = 2;
+const int MAP_SHARED = 1;
+const uint WL_SHM_FORMAT_ARGB8888 = 0;
 
 // Library handle
 void* _wl_lib;
@@ -300,6 +243,9 @@ fn bool wayland_load()
 	wl_subcompositor_interface = (Interface*)dlsym(_wl_lib, "wl_subcompositor_interface");
 	wl_keyboard_interface = (Interface*)dlsym(_wl_lib, "wl_keyboard_interface");
 	wl_pointer_interface = (Interface*)dlsym(_wl_lib, "wl_pointer_interface");
+	wl_shm_interface = (Interface*)dlsym(_wl_lib, "wl_shm_interface");
+	wl_shm_pool_interface = (Interface*)dlsym(_wl_lib, "wl_shm_pool_interface");
+	wl_buffer_interface = (Interface*)dlsym(_wl_lib, "wl_buffer_interface");
 
 	// Patch xdg_shell protocol type arrays with loaded interface pointers
 	get_xdg_surface[1] = wl_surface_interface;
@@ -314,35 +260,16 @@ fn bool wayland_load()
 }
 
 
-fn void surface_commit(
-	Surface surface
-) => proxy_marshal_flags(surface, 6, null, proxy_get_version(surface), 0);
+fn void surface_commit(Surface surface) => proxy_marshal_flags(surface, 6, null, proxy_get_version(surface), 0);
 fn void* registry_bind(
 	Registry registry,
 	Interface* inter,
 	int name,
 	int version
-) => proxy_marshal_flags(
-	registry,
-	WL_REGISTRY_BIND,
-	inter,
-	version,
-	0,
-	name,
-	inter.name,
-	version,
-	null
-);
+) => proxy_marshal_flags(registry, WL_REGISTRY_BIND, inter, version, 0, name, inter.name, version, null);
 fn Registry get_registry(
 	Display display
-) => proxy_marshal_flags(
-	display,
-	WL_DISPLAY_GET_REGISTRY,
-	wl_registry_interface,
-	1,
-	0,
-	null
-);
+) => proxy_marshal_flags(display, WL_DISPLAY_GET_REGISTRY, wl_registry_interface, 1, 0, null);
 fn double fixed_to_double(int fixed) => fixed / 256.0;
 
 enum SeatCapability : uint (uint value)
@@ -363,21 +290,10 @@ fn void shellPing(WaylandWindow* window, Shell shell, uint serial)
 	proxy_marshal_flags(shell, 3, null, proxy_get_version(shell), 0, serial);
 }
 
-fn void shellSurfaceConfigure(
-	WaylandWindow* window,
-	XDG_surface surface,
-	uint serial
-)
+fn void shellSurfaceConfigure(WaylandWindow* window, XDG_surface surface, uint serial)
 {
 	// ack_configure
-	proxy_marshal_flags(
-		surface,
-		4,
-		null,
-		proxy_get_version(surface),
-		0,
-		serial
-	);
+	proxy_marshal_flags(surface, 4, null, proxy_get_version(surface), 0, serial);
 	// Commit the surface so the compositor knows we're responsive
 	surface_commit(window.surface);
 }
@@ -388,28 +304,13 @@ fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
 	// data.open = false;
 }
 
-fn void topSurfaceConfigure(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	int width,
-	int height,
-	void* states
-)
+fn void topSurfaceConfigure(WaylandWindow* data, XDG_top_level top_level, int width, int height, void* states)
 {
 }
-fn void topSurfaceBounds(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	int width,
-	int height
-)
+fn void topSurfaceBounds(WaylandWindow* data, XDG_top_level top_level, int width, int height)
 {
 }
-fn void topSurfaceCapabilities(
-	WaylandWindow* data,
-	XDG_top_level top_level,
-	void* capabilities
-)
+fn void topSurfaceCapabilities(WaylandWindow* data, XDG_top_level top_level, void* capabilities)
 {
 }
 
@@ -417,27 +318,13 @@ fn void seatCapabilities(WaylandWindow* data, Seat seat, uint capabilities)
 {
 	if (capabilities & SeatCapability.KEYBOARD.value)
 	{
-		Keyboard keyboard = proxy_marshal_flags(
-			seat,
-			1,
-			wl_keyboard_interface,
-			proxy_get_version(seat),
-			0,
-			null
-		);
+		Keyboard keyboard = proxy_marshal_flags(seat, 1, wl_keyboard_interface, proxy_get_version(seat), 0, null);
 		proxy_add_listener(keyboard, &keyboardListener, data);
 	}
 
 	if (capabilities & SeatCapability.POINTER.value)
 	{
-		Pointer pointer = proxy_marshal_flags(
-			seat,
-			0,
-			wl_pointer_interface,
-			proxy_get_version(seat),
-			0,
-			null
-		);
+		Pointer pointer = proxy_marshal_flags(seat, 0, wl_pointer_interface, proxy_get_version(seat), 0, null);
 		proxy_add_listener(pointer, &pointerListener, data);
 	}
 }
@@ -450,37 +337,17 @@ fn void seatName(WaylandWindow* data, Seat seat, char* name)
 fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint sz)
 {
 }
-fn void kbEnter(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint ser,
-	Surface surface,
-	WLArray* keys
-)
+fn void kbEnter(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys)
 {
 }
 fn void kbLeave(WaylandWindow* data, Keyboard kb, uint ser, Surface surface)
 {
 }
-fn void noop(
-	void* data,
-	void* data1,
-	void* data2,
-	void* data3,
-	void* data4,
-	void* data5
-)
+fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, void* data5)
 {
 }
 
-fn void kbKey(
-	WaylandWindow* data,
-	void* kb,
-	uint serial,
-	uint type,
-	uint key,
-	uint state
-)
+fn void kbKey(WaylandWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
 	EventKey keyboard_key = linuxScancodeToEventKey(key + 8);
 	if (keyboard_key != EMPTY_KEY)
@@ -489,59 +356,26 @@ fn void kbKey(
 	}
 }
 
-fn void kbMod(
-	WaylandWindow* data,
-	Keyboard kb,
-	uint serial,
-	uint dep,
-	uint lat,
-	uint lock,
-	uint group
-)
+fn void kbMod(WaylandWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group)
 {
 }
 fn void kbRep(WaylandWindow* data, Keyboard kb, int rate, int del)
 {
 }
 
-fn void pointerEnter(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	Surface surface,
-	int x,
-	int y
-)
+fn void pointerEnter(WaylandWindow* data, Pointer pointer, int serial, Surface surface, int x, int y)
 {
 }
-fn void pointerLeave(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	Surface surface
-)
+fn void pointerLeave(WaylandWindow* data, Pointer pointer, int serial, Surface surface)
 {
 }
 
-fn void pointerMotion(
-	WaylandWindow* data,
-	Pointer pointer,
-	uint time,
-	int x,
-	int y
-)
+fn void pointerMotion(WaylandWindow* data, Pointer pointer, uint time, int x, int y)
 {
 	data.mouse_pos = { (float)fixed_to_double(x), -(float)fixed_to_double(y) };
 }
 
-fn void pointerButton(
-	WaylandWindow* data,
-	Pointer pointer,
-	int serial,
-	uint time,
-	uint button,
-	uint state
-)
+fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint time, uint button, uint state)
 {
 	// Left mouse button
 	if (button == 272)
@@ -562,13 +396,7 @@ fn void pointerButton(
 	}
 }
 
-fn void pointerAxis(
-	WaylandWindow* data,
-	Pointer pointer,
-	uint time,
-	uint axis,
-	int value
-)
+fn void pointerAxis(WaylandWindow* data, Pointer pointer, uint time, uint axis, int value)
 {
 	// Mouse scroll event
 	if (value > 0)
@@ -582,63 +410,35 @@ fn void pointerAxis(
 }
 
 
-fn void handleRegistry(
-	WaylandWindow* window,
-	Registry registry,
-	uint name,
-	char* interface_name,
-	uint version
-)
+fn void handleRegistry(WaylandWindow* window, Registry registry, uint name, char* interface_name, uint version)
 {
 	String action_name = ((ZString)interface_name).str_view();
 
 	if (action_name == "wl_compositor")
 	{
-		Compositor compositor = registry_bind(
-			registry,
-			wl_compositor_interface,
-			name,
-			version
-		);
-		window.surface = registry_bind(
-			compositor,
-			wl_surface_interface,
-			name,
-			version
-		);
+		Compositor compositor = registry_bind(registry, wl_compositor_interface, name, version);
+		window.surface = registry_bind(compositor, wl_surface_interface, name, version);
 	}
 
 	if (action_name == "xdg_wm_base")
 	{
-		window.shell = registry_bind(
-			registry,
-			&xdg_wm_base_interface,
-			name,
-			version
-		);
+		window.shell = registry_bind(registry, &xdg_wm_base_interface, name, version);
 		proxy_add_listener(window.shell, &shellListener, window);
+	}
+
+	if (action_name == "wl_shm")
+	{
+		window.shm = registry_bind(registry, wl_shm_interface, name, 1);
 	}
 
 	if (action_name == "wl_seat")
 	{
-		window.seat = registry_bind(
-			registry,
-			wl_seat_interface,
-			name,
-			version
-		);
+		window.seat = registry_bind(registry, wl_seat_interface, name, version);
 		proxy_add_listener(window.seat, &seatListener, window);
 	}
 }
 
-KeyboardListener keyboardListener = {
-	&kbMap,
-	&kbEnter,
-	&kbLeave,
-	&kbKey,
-	&kbMod,
-	&kbRep
-};
+KeyboardListener keyboardListener = { &kbMap, &kbEnter, &kbLeave, &kbKey, &kbMod, &kbRep };
 
 ShellSurfaceListener shellSurfaceListener = { &shellSurfaceConfigure };
 
@@ -667,14 +467,15 @@ PointerListener pointerListener = {
 	&noop,
 	&noop,
 	&noop
-};
+	};
 
 // Test if Wayland is available
 fn bool wayland_available()
 {
 	if (!wayland_load()) return false;
 	Display dpy = connect(null);
-	if (dpy) {
+	if (dpy)
+	{
 		disconnect(dpy);
 		return true;
 	}
@@ -720,51 +521,105 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	);
 	proxy_add_listener(window.top_level, &topSurfaceListener, window);
 	assert (window.top_level);
-	// Set title
-	proxy_marshal_flags(
-		window.top_level,
-		1,
-		&xdg_toplevel_interface,
-		proxy_get_version(window.top_level),
-		0,
-		null,
-		name
-	);
-	// Set id
+	// Set title (opcode 2)
 	proxy_marshal_flags(
 		window.top_level,
 		2,
-		&xdg_toplevel_interface,
+		null,
 		proxy_get_version(window.top_level),
 		0,
-		null,
-		name
+		name.ptr
 	);
-	// Set min size
+	// Set app_id (opcode 3)
 	proxy_marshal_flags(
 		window.top_level,
-		8,
-		&xdg_toplevel_interface,
+		3,
+		null,
 		proxy_get_version(window.top_level),
 		0,
-		null,
-		params.width,
-		params.height
+		name.ptr
 	);
-	// Set max size
+	// Set max size (opcode 7)
 	proxy_marshal_flags(
 		window.top_level,
 		7,
-		&xdg_toplevel_interface,
+		null,
 		proxy_get_version(window.top_level),
 		0,
+		params.width,
+		params.height
+	);
+	// Set min size (opcode 8)
+	proxy_marshal_flags(
+		window.top_level,
+		8,
 		null,
+		proxy_get_version(window.top_level),
+		0,
 		params.width,
 		params.height
 	);
 
 	surface_commit(window.surface);
 	rountrip(display);
+
+	// Create a shared memory buffer so the window is visible
+	if (window.shm)
+	{
+		int stride = params.width * 4;
+		int buf_size = stride * params.height;
+
+		ZString shm_name = "wl_shm";
+		int fd = memfd_create(shm_name, 0);
+		if (fd < 0) return FAILED_OPENING_WINDOW~;
+		ftruncate(fd, (usz)buf_size);
+		void* data = mmap(null, (usz)buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+		// Fill with opaque black (ARGB8888: A=0xFF, R=0, G=0, B=0)
+		char* pixels = (char*)data;
+		for (int i = 0; i < buf_size; i += 4)
+		{
+			pixels[i]     = 0;    // B
+			pixels[i + 1] = 0;    // G
+			pixels[i + 2] = 0;    // R
+			pixels[i + 3] = (char)255;  // A
+		}
+
+		// wl_shm.create_pool(fd, size) → opcode 0, signature "nhi"
+		ShmPool pool = proxy_marshal_flags(
+			window.shm, 0, wl_shm_pool_interface,
+			proxy_get_version(window.shm), 0,
+			null, fd, buf_size
+		);
+
+		// wl_shm_pool.create_buffer(offset, width, height, stride, format) → opcode 0, signature "niiiiu"
+		window.buffer = proxy_marshal_flags(
+			pool, 0, wl_buffer_interface,
+			proxy_get_version(pool), 0,
+			null, 0, params.width, params.height, stride, WL_SHM_FORMAT_ARGB8888
+		);
+
+		// wl_shm_pool.destroy → opcode 1
+		proxy_marshal_flags(pool, 1, null, proxy_get_version(pool), WL_MARSHAL_FLAG_DESTROY);
+
+		munmap(data, (usz)buf_size);
+		close_fd(fd);
+
+		// wl_surface.attach(buffer, 0, 0) → opcode 1, signature "oii"
+		proxy_marshal_flags(
+			window.surface, 1, null,
+			proxy_get_version(window.surface), 0,
+			window.buffer, 0, 0
+		);
+
+		// wl_surface.damage(0, 0, width, height) → opcode 2, signature "iiii"
+		proxy_marshal_flags(
+			window.surface, 2, null,
+			proxy_get_version(window.surface), 0,
+			0, 0, params.width, params.height
+		);
+	}
+
 	surface_commit(window.surface);
 
 	window.initialized = true;
@@ -804,34 +659,10 @@ fn void wayland_pollEvents(WaylandWindow* self)
 fn void wayland_free(WaylandWindow* self)
 {
 	// proxy_destroy(self.src.keyboard);
-	proxy_marshal_flags(
-		self.seat,
-		3,
-		null,
-		proxy_get_version(self.seat),
-		WL_MARSHAL_FLAG_DESTROY
-	);
-	proxy_marshal_flags(
-		self.surface,
-		0,
-		null,
-		proxy_get_version(self.surface),
-		WL_MARSHAL_FLAG_DESTROY
-	);
-	proxy_marshal_flags(
-		self.xdg_surface,
-		0,
-		null,
-		proxy_get_version(self.surface),
-		WL_MARSHAL_FLAG_DESTROY
-	);
-	proxy_marshal_flags(
-		self.top_level,
-		0,
-		null,
-		proxy_get_version(self.surface),
-		WL_MARSHAL_FLAG_DESTROY
-	);
+	proxy_marshal_flags(self.seat, 3, null, proxy_get_version(self.seat), WL_MARSHAL_FLAG_DESTROY);
+	proxy_marshal_flags(self.surface, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
+	proxy_marshal_flags(self.xdg_surface, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
+	proxy_marshal_flags(self.top_level, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
 	disconnect(self.display);
 	self.initialized = false;
 }

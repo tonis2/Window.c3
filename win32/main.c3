@@ -4,30 +4,30 @@ import std::os::win32;
 import std::io;
 
 // Win32 message constants
-const uint WM_PAINT = 0x000F;
-const uint WM_DESTROY = 0x0002;
-const uint WM_SIZE = 0x0005;
-const uint WM_CLOSE = 0x0010;
-const uint WM_QUIT = 0x0012;
-const uint WM_KEYDOWN = 0x0100;
-const uint WM_KEYUP = 0x0101;
-const uint WM_MOUSEMOVE = 0x0200;
+const uint WM_PAINT       = 0x000F;
+const uint WM_DESTROY     = 0x0002;
+const uint WM_SIZE        = 0x0005;
+const uint WM_CLOSE       = 0x0010;
+const uint WM_QUIT        = 0x0012;
+const uint WM_KEYDOWN     = 0x0100;
+const uint WM_KEYUP       = 0x0101;
+const uint WM_MOUSEMOVE   = 0x0200;
 const uint WM_LBUTTONDOWN = 0x0201;
-const uint WM_LBUTTONUP = 0x0202;
+const uint WM_LBUTTONUP   = 0x0202;
 const uint WM_RBUTTONDOWN = 0x0204;
-const uint WM_RBUTTONUP = 0x0205;
+const uint WM_RBUTTONUP   = 0x0205;
 const uint WM_MBUTTONDOWN = 0x0207;
-const uint WM_MBUTTONUP = 0x0208;
-const uint WM_MOUSEWHEEL = 0x020A;
+const uint WM_MBUTTONUP   = 0x0208;
+const uint WM_MOUSEWHEEL  = 0x020A;
 
 // PeekMessage flags
-const uint PM_REMOVE = 0x0001;
+const uint PM_REMOVE   = 0x0001;
 const uint PM_NOREMOVE = 0x0000;
 
 // Class styles
 const uint CS_HREDRAW = 0x0002;
 const uint CS_VREDRAW = 0x0001;
-const uint CS_OWNDC = 0x0020;
+const uint CS_OWNDC   = 0x0020;
 
 // ShowWindow commands
 const int SW_SHOW = 5;
@@ -35,7 +35,7 @@ const int SW_HIDE = 0;
 
 // Default window icons/cursors
 const uptr IDI_APPLICATION = 32512;
-const uptr IDC_ARROW = 32512;
+const uptr IDC_ARROW       = 32512;
 
 // Window background
 const iptr COLOR_WINDOW = 5;
@@ -57,37 +57,22 @@ alias Msg = win32::Win32_MSG;
 alias WndClassExW = win32::Win32_WNDCLASSEXW;
 alias Char16 = win32::Win32_WCHAR;
 
-extern fn int peekMessageW(
-	Msg* msg,
-	HWnd hwnd,
-	uint filterMin,
-	uint filterMax,
-	uint removeMsg
-) @extern("PeekMessageW");
+extern fn int peekMessageW(Msg* msg, HWnd hwnd, uint filterMin, uint filterMax, uint removeMsg) @extern("PeekMessageW");
 
 
 extern fn void postQuitMessage(int exitCode) @extern("PostQuitMessage");
 
 
-extern fn HCursor loadCursorW(
-	HInstance instance,
-	Char16* name
-) @extern("LoadCursorW");
+extern fn HCursor loadCursorW(HInstance instance, Char16* name) @extern("LoadCursorW");
 
 
-extern fn HIcon loadIconW(
-	HInstance instance,
-	Char16* name
-) @extern("LoadIconW");
+extern fn HIcon loadIconW(HInstance instance, Char16* name) @extern("LoadIconW");
 
 
 extern fn bool getCursorPos(Point* point) @extern("GetCursorPos");
 
 
-extern fn bool screenToClient(
-	HWnd hwnd,
-	Point* point
-) @extern("ScreenToClient");
+extern fn bool screenToClient(HWnd hwnd, Point* point) @extern("ScreenToClient");
 
 
 extern fn bool destroyWindow(HWnd hwnd) @extern("DestroyWindow");
@@ -102,7 +87,6 @@ extern fn HDc getDC(HWnd hwnd) @extern("GetDC");
 extern fn HInstance getModuleHandleW(Char16* name) @extern("GetModuleHandleW");
 
 
-
 struct Win32Window
 {
 	HWnd hwnd;
@@ -113,12 +97,7 @@ struct Win32Window
 }
 
 // Window procedure callback
-fn LResult windowProc(
-	HWnd hwnd,
-	uint msg,
-	WParam wparam,
-	LParam lparam
-) @extern("c3w_window_proc")
+fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @extern("c3w_window_proc")
 {
 	switch (msg)
 	{
@@ -173,7 +152,7 @@ fn Window? new(Params params, String name)
 		.lpszMenuName = null,
 		.lpszClassName = &class_name_wide,
 		.hIconSm = null,
-	};
+		};
 
 	Atom atom = win32::registerClassExW(&wc);
 	if (atom == 0)
@@ -272,10 +251,7 @@ fn EventMap Window.getEvent(&self)
 					self.src.event_map.set(MOUSE_SCROLL_DOWN, true);
 				}
 			case WM_MOUSEMOVE:
-				self.src.mouse_pos = {
-					(float)(msg.lParam & 0xFFFF),
-					(float)((msg.lParam >> 16) & 0xFFFF)
-				};
+				self.src.mouse_pos = { (float)(msg.lParam & 0xFFFF), (float)((msg.lParam >> 16) & 0xFFFF) };
 			default:
 		}
 	}
