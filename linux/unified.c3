@@ -36,6 +36,17 @@ struct LinuxWindow
 // Auto-detect which display server to use
 fn BackendType detect_backend()
 {
+	// Feature flags to force a specific backend
+	$if $feature(X11):
+		io::printfn("Using X11 display server (forced by feature)");
+		return BackendType.X11;
+	$else
+		$if $feature(WAYLAND):
+			io::printfn("Using Wayland display server (forced by feature)");
+			return BackendType.WAYLAND;
+		$endif
+	$endif
+
 	// Check XDG_SESSION_TYPE environment variable
 	char* session_type = getenv("XDG_SESSION_TYPE");
 
@@ -178,4 +189,71 @@ fn void Window.free(self)
 fn BackendType Window.getBackend(self)
 {
 	return self.src.backend;
+}
+
+// Minimal Vulkan structs for surface creation (matches C ABI layout)
+struct VkWaylandSurfaceCreateInfo {
+	uint sType;
+	void* pNext;
+	uint flags;
+	void* display;
+	void* surface;
+}
+
+struct VkXcbSurfaceCreateInfo {
+	uint sType;
+	void* pNext;
+	uint flags;
+	void* connection;
+	uint window;
+}
+
+alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
+alias VkSurface = void*;
+
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
+{
+	void* vk_lib = dlopen("libvulkan.so.1", RTLD_LAZY);
+	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+	defer dlclose(vk_lib);
+
+	void* surface;
+
+	switch (self.src.backend)
+	{
+		case WAYLAND:
+			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
+			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateWaylandSurfaceKHR");
+			if (create_fn == null) return FAILED_OPENING_WINDOW~;
+
+			VkWaylandSurfaceCreateInfo create_info = {
+				.sType = 1000006000,
+				.pNext = null,
+				.flags = 0,
+				.display = wl.display,
+				.surface = wl.surface,
+			};
+			int result = create_fn(vk_instance, &create_info, null, &surface);
+			if (result != 0) return FAILED_OPENING_WINDOW~;
+
+		case X11:
+			X11Window* x11 = (X11Window*)self.src.backend_data;
+			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateXcbSurfaceKHR");
+			if (create_fn == null) return FAILED_OPENING_WINDOW~;
+
+			VkXcbSurfaceCreateInfo create_info = {
+				.sType = 1000005000,
+				.pNext = null,
+				.flags = 0,
+				.connection = x11.connection,
+				.window = (uint)(uptr)x11.window,
+			};
+			int result = create_fn(vk_instance, &create_info, null, &surface);
+			if (result != 0) return FAILED_OPENING_WINDOW~;
+
+		default:
+			return FAILED_OPENING_WINDOW~;
+	}
+
+	return surface;
 }
