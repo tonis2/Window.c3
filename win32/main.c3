@@ -519,3 +519,44 @@ fn EventKey win32VkToEventKey(uint vk)
 			return EMPTY_KEY;
 	}
 }
+
+
+// Vulkan code
+extern fn void* loadLibraryA(char* name) @extern("LoadLibraryA");
+extern fn void* getProcAddress(void* module, char* name) @extern("GetProcAddress");
+extern fn bool freeLibrary(void* module) @extern("FreeLibrary");
+
+struct VkWin32SurfaceCreateInfo {
+	uint sType;
+	void* pNext;
+	uint flags;
+	void* hinstance;
+	void* hwnd;
+}
+
+alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
+alias VkSurface = void*;
+
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
+{
+	void* vk_lib = loadLibraryA("vulkan-1.dll");
+	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+	defer freeLibrary(vk_lib);
+
+	VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)getProcAddress(vk_lib, "vkCreateWin32SurfaceKHR");
+	if (create_fn == null) return FAILED_OPENING_WINDOW~;
+
+	VkWin32SurfaceCreateInfo create_info = {
+		.sType = 1000009000,
+		.pNext = null,
+		.flags = 0,
+		.hinstance = self.src.instance,
+		.hwnd = self.src.hwnd,
+	};
+
+	void* surface;
+	int result = create_fn(vk_instance, &create_info, null, &surface);
+	if (result != 0) return FAILED_OPENING_WINDOW~;
+
+	return surface;
+}

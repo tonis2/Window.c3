@@ -200,6 +200,49 @@ fn void Window.free(&self)
 	self.src.app.terminate();
 }
 
+// Dynamic library loading (POSIX, available on macOS)
+extern fn void* dlopen(char* filename, int flags) @extern("dlopen");
+extern fn void* dlsym(void* handle, char* symbol) @extern("dlsym");
+extern fn int dlclose(void* handle) @extern("dlclose");
+
+const int RTLD_LAZY = 1;
+
+struct VkMetalSurfaceCreateInfo {
+	uint sType;
+	void* pNext;
+	uint flags;
+	void* pLayer;
+}
+
+alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
+alias VkSurface = void*;
+
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
+{
+	void* vk_lib = dlopen("libvulkan.1.dylib", RTLD_LAZY);
+	if (vk_lib == null) {
+		vk_lib = dlopen("libMoltenVK.dylib", RTLD_LAZY);
+	}
+	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+	defer dlclose(vk_lib);
+
+	VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateMetalSurfaceEXT");
+	if (create_fn == null) return FAILED_OPENING_WINDOW~;
+
+	VkMetalSurfaceCreateInfo create_info = {
+		.sType = 1000217000,
+		.pNext = null,
+		.flags = 0,
+		.pLayer = self.src.layer.id,
+	};
+
+	void* surface;
+	int result = create_fn(vk_instance, &create_info, null, &surface);
+	if (result != 0) return FAILED_OPENING_WINDOW~;
+
+	return surface;
+}
+
 // macOS NSEvent types (for internal use)
 enum DarwinEventType : uint (uint value)
 {
