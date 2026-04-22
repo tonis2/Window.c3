@@ -282,8 +282,13 @@ fn void x11_pollEvents(X11Window* self, EventMap* event_map)
 
 	if (event != null)
 	{
-		EventType type = EventType.lookup_field(code, event.type)!!;
-		EventKey key = EventKey.lookup_field(code, (uint)event.value)!!;
+		EventType? type_opt = EventType.lookup_field(code, event.type);
+		if (catch type_opt) return;
+		EventType type = type_opt;
+
+		EventKey? key_opt = EventKey.lookup_field(code, (uint)event.value);
+		if (catch key_opt) return;
+		EventKey key = key_opt;
 
 		switch (type)
 		{

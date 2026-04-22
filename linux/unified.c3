@@ -38,12 +38,16 @@ fn BackendType detect_backend()
 {
 	// Feature flags to force a specific backend
 	$if $feature(X11):
-		io::printfn("Using X11 display server (forced by feature)");
-		return BackendType.X11;
+		if (x11_available()) {
+			io::printfn("Using X11 display server (forced by feature)");
+			return BackendType.X11;
+		}
 	$else
 		$if $feature(WAYLAND):
-			io::printfn("Using Wayland display server (forced by feature)");
-			return BackendType.WAYLAND;
+			if (wayland_available()) {
+				io::printfn("Using Wayland display server (forced by feature)");
+				return BackendType.WAYLAND;
+			}
 		$endif
 	$endif
 
