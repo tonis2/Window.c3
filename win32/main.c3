@@ -523,8 +523,8 @@ fn EventKey win32VkToEventKey(uint vk)
 
 // Vulkan code
 extern fn void* loadLibraryA(char* name) @extern("LoadLibraryA");
-extern fn void* getProcAddress(void* module, char* name) @extern("GetProcAddress");
-extern fn bool freeLibrary(void* module) @extern("FreeLibrary");
+extern fn void* getProcAddress(void* mod, char* name) @extern("GetProcAddress");
+extern fn bool freeLibrary(void* mod) @extern("FreeLibrary");
 
 struct VkWin32SurfaceCreateInfo {
 	uint sType;
