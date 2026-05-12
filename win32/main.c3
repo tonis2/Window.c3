@@ -57,34 +57,34 @@ alias Msg = win32::Win32_MSG;
 alias WndClassExW = win32::Win32_WNDCLASSEXW;
 alias Char16 = win32::Win32_WCHAR;
 
-extern fn int peekMessageW(Msg* msg, HWnd hwnd, uint filterMin, uint filterMax, uint removeMsg) @extern("PeekMessageW");
+extern fn int peekMessageW(Msg* msg, HWnd hwnd, uint filterMin, uint filterMax, uint removeMsg) @cname("PeekMessageW");
 
 
-extern fn void postQuitMessage(int exitCode) @extern("PostQuitMessage");
+extern fn void postQuitMessage(int exitCode) @cname("PostQuitMessage");
 
 
-extern fn HCursor loadCursorW(HInstance instance, Char16* name) @extern("LoadCursorW");
+extern fn HCursor loadCursorW(HInstance instance, Char16* name) @cname("LoadCursorW");
 
 
-extern fn HIcon loadIconW(HInstance instance, Char16* name) @extern("LoadIconW");
+extern fn HIcon loadIconW(HInstance instance, Char16* name) @cname("LoadIconW");
 
 
-extern fn bool getCursorPos(Point* point) @extern("GetCursorPos");
+extern fn bool getCursorPos(Point* point) @cname("GetCursorPos");
 
 
-extern fn bool screenToClient(HWnd hwnd, Point* point) @extern("ScreenToClient");
+extern fn bool screenToClient(HWnd hwnd, Point* point) @cname("ScreenToClient");
 
 
-extern fn bool destroyWindow(HWnd hwnd) @extern("DestroyWindow");
+extern fn bool destroyWindow(HWnd hwnd) @cname("DestroyWindow");
 
 
-extern fn int releaseDC(HWnd hwnd, HDc hdc) @extern("ReleaseDC");
+extern fn int releaseDC(HWnd hwnd, HDc hdc) @cname("ReleaseDC");
 
 
-extern fn HDc getDC(HWnd hwnd) @extern("GetDC");
+extern fn HDc getDC(HWnd hwnd) @cname("GetDC");
 
 
-extern fn HInstance getModuleHandleW(Char16* name) @extern("GetModuleHandleW");
+extern fn HInstance getModuleHandleW(Char16* name) @cname("GetModuleHandleW");
 
 
 struct Win32Window
@@ -97,7 +97,7 @@ struct Win32Window
 }
 
 // Window procedure callback
-fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @extern("c3w_window_proc")
+fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @cname("c3w_window_proc")
 {
 	switch (msg)
 	{
@@ -140,7 +140,7 @@ fn Window? new(Params params, String name)
 	window_name_wide[i] = 0;
 
 	WndClassExW wc = {
-		.cbSize = WndClassExW.sizeof,
+		.cbSize = WndClassExW::size,
 		.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
 		.lpfnWndProc = &windowProc,
 		.cbClsExtra = 0,
@@ -522,9 +522,9 @@ fn EventKey win32VkToEventKey(uint vk)
 
 
 // Vulkan code
-extern fn void* loadLibraryA(char* name) @extern("LoadLibraryA");
-extern fn void* getProcAddress(void* mod, char* name) @extern("GetProcAddress");
-extern fn bool freeLibrary(void* mod) @extern("FreeLibrary");
+extern fn void* loadLibraryA(char* name) @cname("LoadLibraryA");
+extern fn void* getProcAddress(void* mod, char* name) @cname("GetProcAddress");
+extern fn bool freeLibrary(void* mod) @cname("FreeLibrary");
 
 struct VkWin32SurfaceCreateInfo {
 	uint sType;

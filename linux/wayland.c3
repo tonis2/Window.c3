@@ -10,7 +10,7 @@ alias ShellPing = fn void(WaylandWindow* data, Shell shell, uint serial);
 alias SeatCapabilitiesEvent = fn void(WaylandWindow* data, void* wl_registry, uint capabilities);
 alias SeatNameEvent = fn void(WaylandWindow* data, void* wl_registry, char* name);
 
-alias KBmapEvent = fn void(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint sz);
+alias KBmapEvent = fn void(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint size);
 alias KBenterEvent = fn void(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys);
 alias KBleaveEvent = fn void(WaylandWindow* data, Keyboard kb, uint ser, Surface surface);
 alias KBkeyEvent = fn void(WaylandWindow* data, Keyboard kb, uint serial, uint type, uint key, uint state);
@@ -163,7 +163,7 @@ struct PollFd
 	short revents;
 }
 const short POLLIN = 1;
-extern fn int poll(PollFd* fds, uint nfds, int timeout) @extern("poll");
+extern fn int poll(PollFd* fds, uint nfds, int timeout) @cname("poll");
 
 // Function pointers loaded at runtime via dlsym
 FnWlDisplayConnect connect;
@@ -196,11 +196,11 @@ Interface* wl_shm_pool_interface;
 Interface* wl_buffer_interface;
 
 // POSIX syscalls for shared memory
-extern fn int memfd_create(char* name, uint flags) @extern("memfd_create");
-extern fn int ftruncate(int fd, usz length) @extern("ftruncate");
-extern fn void* mmap(void* addr, usz length, int prot, int flags, int fd, long offset) @extern("mmap");
-extern fn int munmap(void* addr, usz length) @extern("munmap");
-extern fn int close_fd(int fd) @extern("close");
+extern fn int memfd_create(char* name, uint flags) @cname("memfd_create");
+extern fn int ftruncate(int fd, usz length) @cname("ftruncate");
+extern fn void* mmap(void* addr, usz length, int prot, int flags, int fd, long offset) @cname("mmap");
+extern fn int munmap(void* addr, usz length) @cname("munmap");
+extern fn int close_fd(int fd) @cname("close");
 
 const int PROT_READ = 1;
 const int PROT_WRITE = 2;
@@ -265,7 +265,7 @@ fn void* registry_bind(
 	Registry registry,
 	Interface* inter,
 	int name,
-	int version
+	uint version
 ) => proxy_marshal_flags(registry, WL_REGISTRY_BIND, inter, version, 0, name, inter.name, version, null);
 fn Registry get_registry(
 	Display display
@@ -334,7 +334,7 @@ fn void seatName(WaylandWindow* data, Seat seat, char* name)
 	// io::printfn("seat %s", (ZString)name);
 }
 
-fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint sz)
+fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint size)
 {
 }
 fn void kbEnter(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys)
@@ -410,7 +410,7 @@ fn void pointerAxis(WaylandWindow* data, Pointer pointer, uint time, uint axis, 
 }
 
 
-fn void handleRegistry(WaylandWindow* window, Registry registry, uint name, char* interface_name, uint version)
+fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char* interface_name, uint version)
 {
 	String action_name = ((ZString)interface_name).str_view();
 
@@ -442,7 +442,7 @@ KeyboardListener keyboardListener = { &kbMap, &kbEnter, &kbLeave, &kbKey, &kbMod
 
 ShellSurfaceListener shellSurfaceListener = { &shellSurfaceConfigure };
 
-RegistryListener registryListener = { &handleRegistry, &removeRegistry };
+RegistryListener registryListener = { (GlobalEvent)&handleRegistry, &removeRegistry };
 
 ShellListener shellListener = { &shellPing, };
 

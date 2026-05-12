@@ -2,7 +2,9 @@ module c3w @if(env::DARWIN);
 import std::math;
 import std::io;
 import std::core::types;
+import std::core::runtime;
 import std::os::macos::objc;
+import std::os::macos::objc::ns;
 
 struct DarwinWindow
 {
@@ -34,14 +36,14 @@ fn Window? new(Params params, String name)
 
 	NSApplication app = { .cls = objc::getClass("NSApplication") };
 	app.sharedApplication();
-	app.setActivationPolicy(ApplicationActivationPolicy.REGULAR);
+	app.setActivationPolicy(NSApplicationActivationPolicy.REGULAR);
 
 	NSWindow win = new_object("NSWindow");
 	win.alloc();
 
-	ulong window_style = WindowStyleMask.CLOSABLE.val | WindowStyleMask.MINIATURIZABLE.val | BackingStore.BUFFERED.val
-		| WindowStyleMask.TITLED.val
-		| WindowStyleMask.RESIZABLE.val;
+	ulong window_style = NSWindowStyleMask.CLOSABLE | NSWindowStyleMask.MINIATURIZABLE | NSBackingStoreType.BUFFERED
+		| NSWindowStyleMask.TITLED
+		| NSWindowStyleMask.RESIZABLE;
 	win.initWithContentRect(
 		(NSRect) { { params.x, params.y }, { params.width, params.height } },
 		window_style,
@@ -55,7 +57,7 @@ fn Window? new(Params params, String name)
 
 	NSObject delegate = new_object("NSObject");
 	delegate.alloc_class_pair("WindowDelegate", 0);
-	delegate.add_ivar("NSWindow", $sizeof(win), math::log2($sizeof(win)), "L")!!;
+	delegate.add_ivar("NSWindow", @sizeof(win), math::log2(@sizeof(win)), "L")!!;
 	delegate.add_method("windowWillResize:toSize:", &resize_window, "{NSSize=ff}@:{NSSize=ff}")!!;
 	// delegate.add_method("windowDidMiniaturize::", &resize_window, "")!!;
 	// delegate.add_method("windowDidDeminiaturize::", &resize_window, "")!!;
@@ -66,7 +68,7 @@ fn Window? new(Params params, String name)
 	delegate.setInstanceVariable("NSWindow", win);
 	win.setDelegate(delegate);
 
-	win.makeKeyAndOrderFront(null);
+	win.makeKeyAndOrderFront((ObjcSelector)null);
 	win.setIsVisible(true);
 
 	app.activateIgnoringOtherApps(true);
@@ -113,7 +115,7 @@ fn EventMap Window.getEvent(&self)
 	NSDate until;
 	// NSDate until = objc::new("NSDate");
 	// until.distantFuture();
-	NSEvent event = self.src.app.nextEventMatchingMask(long.max, until, loop, true);
+	NSEvent event = self.src.app.nextEventMatchingMask(long::max, until, loop, true);
 	int type = event.get_type();
 
 	self.src.event_map.set(MOUSE_SCROLL_UP, true);
@@ -121,7 +123,7 @@ fn EventMap Window.getEvent(&self)
 
 	if (type != 0)
 	{
-		DarwinEventType? event_type_opt = DarwinEventType.lookup_field(value, type);
+		DarwinEventType? event_type_opt = runtime::@enum_lookup(DarwinEventType, "value", (uint)type);
 		if (catch event_type_opt)
 		{
 			self.src.window.sendEvent(event);
@@ -201,9 +203,9 @@ fn void Window.free(&self)
 }
 
 // Dynamic library loading (POSIX, available on macOS)
-extern fn void* dlopen(char* filename, int flags) @extern("dlopen");
-extern fn void* dlsym(void* handle, char* symbol) @extern("dlsym");
-extern fn int dlclose(void* handle) @extern("dlclose");
+extern fn void* dlopen(char* filename, int flags) @cname("dlopen");
+extern fn void* dlsym(void* handle, char* symbol) @cname("dlsym");
+extern fn int dlclose(void* handle) @cname("dlclose");
 
 const int RTLD_LAZY = 1;
 

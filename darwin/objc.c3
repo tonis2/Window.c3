@@ -1,5 +1,6 @@
 module c3w @if(env::DARWIN);
 import std::os::macos::objc;
+import std::os::macos::objc::ns;
 import std::io;
 import std::math;
 
@@ -124,9 +125,9 @@ fn void NSApplication.sendEvent(&self, NSEvent event)
 	objc::msg_send(self.id, SendEvent, "sendEvent:", event);
 }
 
-fn void NSApplication.setActivationPolicy(&self, ApplicationActivationPolicy policy)
+fn void NSApplication.setActivationPolicy(&self, NSApplicationActivationPolicy policy)
 {
-	objc::msg_send(self.id, SendInt, "setActivationPolicy:", policy.val);
+	objc::msg_send(self.id, SendInt, "setActivationPolicy:", (int)policy);
 }
 
 fn void NSImage.initWithContentsOfFile(&self, NSString str)
@@ -173,8 +174,8 @@ fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong
 		SendContentRec,
 		"initWithContentRect:styleMask:backing:defer:",
 		rect,
-		style_mask,
-		backing,
+		(long)style_mask,
+		(long)backing,
 		is_defer
 	);
 }
