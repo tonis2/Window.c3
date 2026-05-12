@@ -123,7 +123,7 @@ fn Window? new(Params params, String name)
 	ZString window_name = (ZString)name;
 
 	// Simple ASCII to UTF-16 conversion
-	usz i = 0;
+	sz i = 0;
 	while (class_name[i] != 0 && i < 255)
 	{
 		class_name_wide[i] = (Char16)class_name[i];

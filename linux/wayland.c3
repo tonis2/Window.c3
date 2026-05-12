@@ -62,8 +62,8 @@ struct WaylandWindow
 
 struct WLArray
 {
-	usz size;
-	usz alloc;
+	sz size;
+	sz alloc;
 	void* data;
 }
 
@@ -197,9 +197,9 @@ Interface* wl_buffer_interface;
 
 // POSIX syscalls for shared memory
 extern fn int memfd_create(char* name, uint flags) @cname("memfd_create");
-extern fn int ftruncate(int fd, usz length) @cname("ftruncate");
-extern fn void* mmap(void* addr, usz length, int prot, int flags, int fd, long offset) @cname("mmap");
-extern fn int munmap(void* addr, usz length) @cname("munmap");
+extern fn int ftruncate(int fd, sz length) @cname("ftruncate");
+extern fn void* mmap(void* addr, sz length, int prot, int flags, int fd, long offset) @cname("mmap");
+extern fn int munmap(void* addr, sz length) @cname("munmap");
 extern fn int close_fd(int fd) @cname("close");
 
 const int PROT_READ               = 1;
@@ -542,8 +542,8 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		ZString shm_name = "wl_shm";
 		int fd           = memfd_create(shm_name, 0);
 		if (fd < 0) return FAILED_OPENING_WINDOW~;
-		ftruncate(fd, (usz)buf_size);
-		void* data = mmap(null, (usz)buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		ftruncate(fd, (sz)buf_size);
+		void* data = mmap(null, (sz)buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
 		// Fill with opaque black (ARGB8888: A=0xFF, R=0, G=0, B=0)
 		char* pixels = (char*)data;
@@ -585,7 +585,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		// wl_shm_pool.destroy → opcode 1
 		proxy_marshal_flags(pool, 1, null, proxy_get_version(pool), WL_MARSHAL_FLAG_DESTROY);
 
-		munmap(data, (usz)buf_size);
+		munmap(data, (sz)buf_size);
 		close_fd(fd);
 
 		// wl_surface.attach(buffer, 0, 0) → opcode 1, signature "oii"
