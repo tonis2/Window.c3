@@ -1,15 +1,15 @@
 module c3w @if(env::LINUX) @link("dl");
 import std::io;
 
-extern fn char* getenv(char* name) @extern("getenv");
+extern fn char* getenv(char* name) @cname("getenv");
 
 
 // Dynamic library loading
-extern fn void* dlopen(char* filename, int flags) @extern("dlopen");
+extern fn void* dlopen(char* filename, int flags) @cname("dlopen");
 
-extern fn void* dlsym(void* handle, char* symbol) @extern("dlsym");
+extern fn void* dlsym(void* handle, char* symbol) @cname("dlsym");
 
-extern fn int dlclose(void* handle) @extern("dlclose");
+extern fn int dlclose(void* handle) @cname("dlclose");
 
 
 const int RTLD_LAZY   = 1;

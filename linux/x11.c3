@@ -3,6 +3,7 @@ import std::math;
 
 import std::io;
 import std::core::types;
+import std::core::runtime;
 
 alias X11Display = void*;
 alias Connection = void*;
@@ -234,9 +235,9 @@ fn X11Window? x11_create(Params params, String name)
 		screen_iterator.data.root,
 		(short)params.x,
 		(short)params.y,
-		(short)params.width,
-		(short)params.height,
-		(short)1.0,
+		(ushort)params.width,
+		(ushort)params.height,
+		(ushort)1,
 		1,
 		screen_iterator.data.root_visual,
 		mask,
@@ -282,11 +283,11 @@ fn void x11_pollEvents(X11Window* self, EventMap* event_map)
 
 	if (event != null)
 	{
-		EventType? type_opt = EventType.lookup_field(code, event.type);
+		EventType? type_opt = runtime::@enum_lookup(EventType, "code", (uint)event.type);
 		if (catch type_opt) return;
 		EventType type = type_opt;
 
-		EventKey? key_opt = EventKey.lookup_field(code, (uint)event.value);
+		EventKey? key_opt = runtime::@enum_lookup(EventKey, "code", (uint)event.value);
 		if (catch key_opt) return;
 		EventKey key = key_opt;
 
