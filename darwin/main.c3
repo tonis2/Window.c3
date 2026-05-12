@@ -76,8 +76,11 @@ fn Window? new(Params params, String name)
 
 	NSView view = win.get_view();
 	// new_object("NSView");
+
 	// view.alloc();
+
 	// view.init();
+
 
 	CALayer layer = new_object("CAMetalLayer");
 	layer.alloc();
@@ -114,9 +117,11 @@ fn EventMap Window.getEvent(&self)
 
 	NSDate until;
 	// NSDate until = objc::new("NSDate");
+
 	// until.distantFuture();
+
 	NSEvent event = self.src.app.nextEventMatchingMask(long::max, until, loop, true);
-	int type = event.get_type();
+	int type      = event.get_type();
 
 	self.src.event_map.set(MOUSE_SCROLL_UP, true);
 	self.src.event_map.set(MOUSE_SCROLL_UP, true);
@@ -134,6 +139,7 @@ fn EventMap Window.getEvent(&self)
 		switch (event_type)
 		{
 			case SCROLL_WHEEL:
+
 				{
 					double delta = event.get_delta();
 					if (delta > 0)
@@ -147,28 +153,33 @@ fn EventMap Window.getEvent(&self)
 					break;
 				}
 			case LEFT_MOUSE_UP:
+
 				{
 					self.src.event_map.set(LEFT_MOUSE, false);
 					break;
 				}
 			case RIGHT_MOUSE_UP:
+
 				{
 					self.src.event_map.set(RIGHT_MOUSE, false);
 					break;
 				}
 			case LEFT_MOUSE_DOWN:
+
 				{
 					self.src.event_map.set(LEFT_MOUSE, true);
 					break;
 				}
 			case RIGHT_MOUSE_DOWN:
+
 				{
 					self.src.event_map.set(RIGHT_MOUSE, true);
 					break;
 				}
 			case KEY_PRESSED:
+
 				{
-					int key = event.get_key();
+					int key              = event.get_key();
 					EventKey event_value = darwinKeycodeToEventKey(key);
 					if (event_value != EMPTY_KEY)
 					{
@@ -176,8 +187,9 @@ fn EventMap Window.getEvent(&self)
 					}
 				}
 			case KEY_RELEASED:
+
 				{
-					int key = event.get_key();
+					int key              = event.get_key();
 					EventKey event_value = darwinKeycodeToEventKey(key);
 					if (event_value != EMPTY_KEY)
 					{
@@ -185,6 +197,7 @@ fn EventMap Window.getEvent(&self)
 					}
 				}
 			default:
+
 				{
 				};
 		}
@@ -209,7 +222,8 @@ extern fn int dlclose(void* handle) @cname("dlclose");
 
 const int RTLD_LAZY = 1;
 
-struct VkMetalSurfaceCreateInfo {
+struct VkMetalSurfaceCreateInfo
+{
 	uint sType;
 	void* pNext;
 	uint flags;
@@ -222,7 +236,8 @@ alias VkSurface = void*;
 fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
 {
 	void* vk_lib = dlopen("libvulkan.1.dylib", RTLD_LAZY);
-	if (vk_lib == null) {
+	if (vk_lib == null)
+	{
 		vk_lib = dlopen("libMoltenVK.dylib", RTLD_LAZY);
 	}
 	if (vk_lib == null) return FAILED_OPENING_WINDOW~;

@@ -119,7 +119,7 @@ fn Window? new(Params params, String name)
 	Char16[256] class_name_wide;
 	Char16[256] window_name_wide;
 
-	ZString class_name = "c3w_window_class";
+	ZString class_name  = "c3w_window_class";
 	ZString window_name = (ZString)name;
 
 	// Simple ASCII to UTF-16 conversion
@@ -526,7 +526,8 @@ extern fn void* loadLibraryA(char* name) @cname("LoadLibraryA");
 extern fn void* getProcAddress(void* mod, char* name) @cname("GetProcAddress");
 extern fn bool freeLibrary(void* mod) @cname("FreeLibrary");
 
-struct VkWin32SurfaceCreateInfo {
+struct VkWin32SurfaceCreateInfo
+{
 	uint sType;
 	void* pNext;
 	uint flags;

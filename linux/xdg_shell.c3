@@ -36,14 +36,14 @@ struct Message
 // Note: wl_* interface entries are null here and get patched
 // at runtime by wayland_load() after dlsym
 Interface*[*] create_positioner = { &xdg_positioner_interface };
-Interface*[*] get_xdg_surface = { &xdg_surface_interface, null };
-Interface*[*] get_toplevel = { &xdg_toplevel_interface };
-Interface*[*] get_popup = { &xdg_popup_interface, null, &xdg_positioner_interface };
-Interface*[*] set_parent = { &xdg_toplevel_interface };
-Interface*[*] show_window_menu = { null, null, null, null };
-Interface*[*] move = { null, null };
-Interface*[*] resize_edge = { null, null, null };
-Interface*[*] set_fullscreen = { null };
+Interface*[*] get_xdg_surface   = { &xdg_surface_interface, null };
+Interface*[*] get_toplevel      = { &xdg_toplevel_interface };
+Interface*[*] get_popup         = { &xdg_popup_interface, null, &xdg_positioner_interface };
+Interface*[*] set_parent        = { &xdg_toplevel_interface };
+Interface*[*] show_window_menu  = { null, null, null, null };
+Interface*[*] move              = { null, null };
+Interface*[*] resize_edge       = { null, null, null };
+Interface*[*] set_fullscreen    = { null };
 
 Interface*[*] grab = { null, null };
 

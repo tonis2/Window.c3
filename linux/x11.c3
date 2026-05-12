@@ -213,8 +213,8 @@ fn X11Window? x11_create(Params params, String name)
 		return FAILED_OPENING_WINDOW~;
 	}
 
-	Connection connection = xcbConnect(null, null);
-	XCB_setup setup = xcbGetSetup(connection);
+	Connection connection            = xcbConnect(null, null);
+	XCB_setup setup                  = xcbGetSetup(connection);
 	XScreenIterator* screen_iterator = xcbRootsIterator(setup);
 
 	XCB_Window window = xcbWindowId(connection);
@@ -295,16 +295,19 @@ fn void x11_pollEvents(X11Window* self, EventMap* event_map)
 		{
 			case KEY_RELEASED:
 			case MOUSE_RELEASED:
+
 				{
 					event_map.set(key, false);
 				}
 			case KEY_PRESSED:
 			case MOUSE_PRESSED:
+
 				{
 					event_map.set(key, true);
 					break;
 				}
 			default:
+
 				{
 				};
 		}
