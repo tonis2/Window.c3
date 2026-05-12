@@ -38,13 +38,15 @@ fn BackendType detect_backend()
 {
 	// Feature flags to force a specific backend
 	$if $feature(X11):
-		if (x11_available()) {
+		if (x11_available())
+		{
 			io::printfn("Using X11 display server (forced by feature)");
 			return BackendType.X11;
 		}
 	$else
 		$if $feature(WAYLAND):
-			if (wayland_available()) {
+			if (wayland_available())
+			{
 				io::printfn("Using Wayland display server (forced by feature)");
 				return BackendType.WAYLAND;
 			}
@@ -115,6 +117,7 @@ fn Window? new(Params params, String name)
 	switch (backend)
 	{
 		case WAYLAND:
+
 			{
 				WaylandWindow* wl = mem::new(WaylandWindow);
 				*wl = { };
@@ -122,13 +125,15 @@ fn Window? new(Params params, String name)
 				linux_window.backend_data = wl;
 			}
 		case X11:
+
 			{
-				X11Window x11_win = x11_create(params, name)!;
+				X11Window x11_win   = x11_create(params, name)!;
 				X11Window* heap_win = mem::new(X11Window);
 				*heap_win = x11_win;
 				linux_window.backend_data = heap_win;
 			}
 		default:
+
 			{
 				io::printfn("No display server available (tried Wayland and X11)");
 				return FAILED_OPENING_WINDOW~;
@@ -196,7 +201,8 @@ fn BackendType Window.getBackend(self)
 }
 
 // Minimal Vulkan structs for surface creation (matches C ABI layout)
-struct VkWaylandSurfaceCreateInfo {
+struct VkWaylandSurfaceCreateInfo
+{
 	uint sType;
 	void* pNext;
 	uint flags;
@@ -204,7 +210,8 @@ struct VkWaylandSurfaceCreateInfo {
 	void* surface;
 }
 
-struct VkXcbSurfaceCreateInfo {
+struct VkXcbSurfaceCreateInfo
+{
 	uint sType;
 	void* pNext;
 	uint flags;

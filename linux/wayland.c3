@@ -202,9 +202,9 @@ extern fn void* mmap(void* addr, usz length, int prot, int flags, int fd, long o
 extern fn int munmap(void* addr, usz length) @cname("munmap");
 extern fn int close_fd(int fd) @cname("close");
 
-const int PROT_READ = 1;
-const int PROT_WRITE = 2;
-const int MAP_SHARED = 1;
+const int PROT_READ               = 1;
+const int PROT_WRITE              = 2;
+const int MAP_SHARED              = 1;
 const uint WL_SHM_FORMAT_ARGB8888 = 0;
 
 // Library handle
@@ -522,43 +522,13 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	proxy_add_listener(window.top_level, &topSurfaceListener, window);
 	assert (window.top_level);
 	// Set title (opcode 2)
-	proxy_marshal_flags(
-		window.top_level,
-		2,
-		null,
-		proxy_get_version(window.top_level),
-		0,
-		name.ptr
-	);
+	proxy_marshal_flags(window.top_level, 2, null, proxy_get_version(window.top_level), 0, name.ptr);
 	// Set app_id (opcode 3)
-	proxy_marshal_flags(
-		window.top_level,
-		3,
-		null,
-		proxy_get_version(window.top_level),
-		0,
-		name.ptr
-	);
+	proxy_marshal_flags(window.top_level, 3, null, proxy_get_version(window.top_level), 0, name.ptr);
 	// Set max size (opcode 7)
-	proxy_marshal_flags(
-		window.top_level,
-		7,
-		null,
-		proxy_get_version(window.top_level),
-		0,
-		params.width,
-		params.height
-	);
+	proxy_marshal_flags(window.top_level, 7, null, proxy_get_version(window.top_level), 0, params.width, params.height);
 	// Set min size (opcode 8)
-	proxy_marshal_flags(
-		window.top_level,
-		8,
-		null,
-		proxy_get_version(window.top_level),
-		0,
-		params.width,
-		params.height
-	);
+	proxy_marshal_flags(window.top_level, 8, null, proxy_get_version(window.top_level), 0, params.width, params.height);
 
 	surface_commit(window.surface);
 	rountrip(display);
@@ -566,11 +536,11 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	// Create a shared memory buffer so the window is visible
 	if (window.shm)
 	{
-		int stride = params.width * 4;
+		int stride   = params.width * 4;
 		int buf_size = stride * params.height;
 
 		ZString shm_name = "wl_shm";
-		int fd = memfd_create(shm_name, 0);
+		int fd           = memfd_create(shm_name, 0);
 		if (fd < 0) return FAILED_OPENING_WINDOW~;
 		ftruncate(fd, (usz)buf_size);
 		void* data = mmap(null, (usz)buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -579,24 +549,37 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		char* pixels = (char*)data;
 		for (int i = 0; i < buf_size; i += 4)
 		{
-			pixels[i]     = 0;    // B
-			pixels[i + 1] = 0;    // G
-			pixels[i + 2] = 0;    // R
-			pixels[i + 3] = (char)255;  // A
+			pixels[i] = 0; // B
+			pixels[i + 1] = 0; // G
+			pixels[i + 2] = 0; // R
+			pixels[i + 3] = (char)255; // A
 		}
 
 		// wl_shm.create_pool(fd, size) → opcode 0, signature "nhi"
 		ShmPool pool = proxy_marshal_flags(
-			window.shm, 0, wl_shm_pool_interface,
-			proxy_get_version(window.shm), 0,
-			null, fd, buf_size
+			window.shm,
+			0,
+			wl_shm_pool_interface,
+			proxy_get_version(window.shm),
+			0,
+			null,
+			fd,
+			buf_size
 		);
 
 		// wl_shm_pool.create_buffer(offset, width, height, stride, format) → opcode 0, signature "niiiiu"
 		window.buffer = proxy_marshal_flags(
-			pool, 0, wl_buffer_interface,
-			proxy_get_version(pool), 0,
-			null, 0, params.width, params.height, stride, WL_SHM_FORMAT_ARGB8888
+			pool,
+			0,
+			wl_buffer_interface,
+			proxy_get_version(pool),
+			0,
+			null,
+			0,
+			params.width,
+			params.height,
+			stride,
+			WL_SHM_FORMAT_ARGB8888
 		);
 
 		// wl_shm_pool.destroy → opcode 1
@@ -606,17 +589,19 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		close_fd(fd);
 
 		// wl_surface.attach(buffer, 0, 0) → opcode 1, signature "oii"
-		proxy_marshal_flags(
-			window.surface, 1, null,
-			proxy_get_version(window.surface), 0,
-			window.buffer, 0, 0
-		);
+		proxy_marshal_flags(window.surface, 1, null, proxy_get_version(window.surface), 0, window.buffer, 0, 0);
 
 		// wl_surface.damage(0, 0, width, height) → opcode 2, signature "iiii"
 		proxy_marshal_flags(
-			window.surface, 2, null,
-			proxy_get_version(window.surface), 0,
-			0, 0, params.width, params.height
+			window.surface,
+			2,
+			null,
+			proxy_get_version(window.surface),
+			0,
+			0,
+			0,
+			params.width,
+			params.height
 		);
 	}
 

@@ -6,10 +6,7 @@ c3w::Window win;
 
 fn void init() @export("init")
 {
-	win = c3w::new(
-		params: { .width = 900, .height = 600, .x = 0, .y = 0 },
-		name: "Window"
-	)!!;
+	win = c3w::new(params: { .width = 900, .height = 600, .x = 0, .y = 0 }, name: "Window")!!;
 }
 
 fn void frame() @export("frame")

@@ -28,11 +28,7 @@ fn Window? new(Params params, String name)
 {
 	js_init_canvas(params.width, params.height);
 
-	return {
-		.src = {},
-		.width = params.width,
-		.height = params.height,
-	};
+	return { .src = { }, .width = params.width, .height = params.height, };
 }
 
 fn float[<2>] Window.getMousePos(self)
