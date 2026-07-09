@@ -161,7 +161,7 @@ fn float[<2>] Window.getMousePos(self)
 }
 
 // Get events
-fn EventMap Window.getEvent(&self)
+fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	switch (self.src.backend)
 	{

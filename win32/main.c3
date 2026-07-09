@@ -199,7 +199,7 @@ fn float[<2>] Window.getMousePos(&self)
 	return { (float)point.x, (float)point.y };
 }
 
-fn EventMap Window.getEvent(&self)
+fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	Msg msg;
 
