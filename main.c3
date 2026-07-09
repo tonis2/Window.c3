@@ -41,6 +41,20 @@ struct Params
 	int height;
 }
 
+// Mouse cursor shapes settable via Window.set_cursor. Currently implemented on
+// macOS (NSCursor); no-op stubs elsewhere.
+enum CursorShape
+{
+	ARROW,
+	POINTING_HAND,
+	IBEAM,
+	CROSSHAIR,
+	OPEN_HAND,
+	CLOSED_HAND,
+	RESIZE_H,
+	RESIZE_V,
+}
+
 faultdef FAILED_OPENING_WINDOW;
 
 // Unified EventKey enum - platform-neutral key identifiers

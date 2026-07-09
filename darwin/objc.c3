@@ -239,6 +239,20 @@ fn double NSEvent.get_delta(self) => objc::msg_send(self, GetDouble, "deltaY");
 
 fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
+
+// scrollingDeltaY returns CGFloat — must be read through a double-returning
+// call (get_scroll above reads it as int, which returns garbage on arm64).
+fn double NSEvent.get_scrolling_delta(self) => objc::msg_send(self, GetDouble, "scrollingDeltaY");
+
+// The typed characters of a key event as UTF-8. Goes through the NSString id
+// directly: returning the 16-byte NSString struct from msgSend (as
+// get_characters does) scrambles the fields on arm64.
+fn ZString NSEvent.get_characters_utf8(self)
+{
+	void* chars = objc::msg_send(self, GetPtr, "characters");
+	if (!chars) return "";
+	return (ZString)objc::msg_send(chars, GetPtr, "UTF8String");
+}
 // fn void* NSView.get_frame(self) => objc::msg_send(self, GetPtr, "frame");
 
 fn void NSView.wants_Layer(self, bool value) => objc::msg_send(self.id, SendBool, "setWantsLayer:", value);

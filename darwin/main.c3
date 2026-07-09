@@ -13,11 +13,17 @@ struct DarwinWindow
 	NSView view;
 	CALayer layer;
 	EventMap event_map;
+	double scroll_delta;    // accumulated over the last getEvent call
+	DString text;           // UTF-8 typed during the last getEvent call
 }
+
+// Set by the windowShouldClose: delegate; queried via Window.should_close.
+// One flag for the process — c3w manages a single window.
+bool close_requested = false;
 
 fn bool on_close(ObjcId self)
 {
-	io::printn("closing window..");
+	close_requested = true;
 	if (catch self.get_ivar("NSWindow")) return true;
 	return true;
 }
@@ -91,7 +97,7 @@ fn Window? new(Params params, String name)
 	win.set_view(view);
 
 	Window response = {
-		.src = { .window = win, .app = app, .view = view, .layer = layer },
+		.src = { .window = win, .app = app, .view = view, .layer = layer, .text = dstring::new(mem) },
 		.width = params.width,
 		.height = params.height
 	};
@@ -116,37 +122,40 @@ fn EventMap Window.getEvent(&self)
 	loop.stringWithUTF8String("kCFRunLoopDefaultMode");
 
 	NSDate until;
-	// NSDate until = objc::new("NSDate");
 
-	// until.distantFuture();
+	// Per-frame state: scroll and typed text accumulate over this call's
+	// events only; the latched key/button map persists across frames.
+	self.src.event_map.set(MOUSE_SCROLL_UP, false);
+	self.src.event_map.set(MOUSE_SCROLL_DOWN, false);
+	self.src.scroll_delta = 0;
+	self.src.text.clear();
 
-	NSEvent event = self.src.app.nextEventMatchingMask(long::max, until, loop, true);
-	int type      = event.get_type();
-
-	self.src.event_map.set(MOUSE_SCROLL_UP, true);
-	self.src.event_map.set(MOUSE_SCROLL_UP, true);
-
-	if (type != 0)
+	// Drain everything queued since the last call — handling a single event
+	// per frame loses press/release edges and lags typing.
+	while (true)
 	{
+		NSEvent event = self.src.app.nextEventMatchingMask(long::max, until, loop, true);
+		if (!(void*)event) break;
+
+		int type = event.get_type();
 		DarwinEventType? event_type_opt = runtime::@enum_lookup(DarwinEventType, "value", (uint)type);
 		if (catch event_type_opt)
 		{
 			self.src.window.sendEvent(event);
-			self.src.app.updateWindows();
-			return self.src.event_map;
+			continue;
 		}
-		DarwinEventType event_type = event_type_opt;
-		switch (event_type)
+		switch (event_type_opt)
 		{
 			case SCROLL_WHEEL:
 
 				{
-					double delta = event.get_delta();
+					double delta = event.get_scrolling_delta();
+					self.src.scroll_delta += delta;
 					if (delta > 0)
 					{
 						self.src.event_map.set(MOUSE_SCROLL_UP, true);
 					}
-					else
+					else if (delta < 0)
 					{
 						self.src.event_map.set(MOUSE_SCROLL_DOWN, true);
 					}
@@ -176,6 +185,18 @@ fn EventMap Window.getEvent(&self)
 					self.src.event_map.set(RIGHT_MOUSE, true);
 					break;
 				}
+			case OTHER_MOUSE_DOWN:
+
+				{
+					self.src.event_map.set(MIDDLE_MOUSE, true);
+					break;
+				}
+			case OTHER_MOUSE_UP:
+
+				{
+					self.src.event_map.set(MIDDLE_MOUSE, false);
+					break;
+				}
 			case KEY_PRESSED:
 
 				{
@@ -184,6 +205,28 @@ fn EventMap Window.getEvent(&self)
 					if (event_value != EMPTY_KEY)
 					{
 						self.src.event_map.set(event_value, true);
+					}
+					// Typed text: skip command/control chords, control chars
+					// and the 0xF700 function-key range (arrows, F-keys).
+					// Decode to runes first — iterating a String yields raw
+					// bytes, which would leak the function keys' UTF-8
+					// bytes (EF 9C xx) past the range filter.
+					int mods = event.get_modifierFlags();
+					if ((mods & 0x14_0000) == 0)
+					{
+						String chars = event.get_characters_utf8().str_view();
+						@pool()
+						{
+							if (try runes = chars.to_utf32(tmem))
+							{
+								foreach (Char32 c : runes)
+								{
+									if (c < 0x20 || c == 0x7F) continue;
+									if (c >= 0xF700 && c <= 0xF8FF) continue;
+									self.src.text.append_char32(c);
+								}
+							}
+						};
 					}
 				}
 			case KEY_RELEASED:
@@ -201,15 +244,45 @@ fn EventMap Window.getEvent(&self)
 				{
 				};
 		}
+		self.src.window.sendEvent(event);
 	}
 
-	self.src.window.sendEvent(event);
 	self.src.app.updateWindows();
 	return self.src.event_map;
 }
 
+// Accumulated scroll-wheel delta over the last getEvent call, in points
+// (positive = scroll up / away from the user).
+fn float Window.get_scroll(&self) => (float)self.src.scroll_delta;
+
+// UTF-8 text typed during the last getEvent call. Borrowed — valid until the
+// next getEvent.
+fn String Window.get_text(&self) => self.src.text.str_view();
+
+// True once the user has clicked the window's close button.
+fn bool Window.should_close(&self) => close_requested;
+
+fn void Window.set_cursor(&self, CursorShape shape)
+{
+	ObjcClass cls = objc::getClass("NSCursor");
+	void* cursor;
+	switch (shape)
+	{
+		case ARROW:         cursor = objc::msg_send(cls, SendVoid, "arrowCursor");
+		case POINTING_HAND: cursor = objc::msg_send(cls, SendVoid, "pointingHandCursor");
+		case IBEAM:         cursor = objc::msg_send(cls, SendVoid, "IBeamCursor");
+		case CROSSHAIR:     cursor = objc::msg_send(cls, SendVoid, "crosshairCursor");
+		case OPEN_HAND:     cursor = objc::msg_send(cls, SendVoid, "openHandCursor");
+		case CLOSED_HAND:   cursor = objc::msg_send(cls, SendVoid, "closedHandCursor");
+		case RESIZE_H:      cursor = objc::msg_send(cls, SendVoid, "resizeLeftRightCursor");
+		case RESIZE_V:      cursor = objc::msg_send(cls, SendVoid, "resizeUpDownCursor");
+	}
+	if (cursor) objc::msg_send(cursor, SendVoid, "set");
+}
+
 fn void Window.free(&self)
 {
+	self.src.text.free();
 	self.src.layer.release();
 	self.src.window.release();
 	self.src.app.terminate();

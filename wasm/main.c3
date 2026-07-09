@@ -228,3 +228,9 @@ fn EventKey jsMouseToEventKey(uint button)
 		default: return EMPTY_KEY;
 	}
 }
+
+// --- API parity with the darwin backend (real implementations TODO) ---
+fn float Window.get_scroll(&self) => 0;
+fn String Window.get_text(&self) => "";
+fn bool Window.should_close(&self) => false;
+fn void Window.set_cursor(&self, CursorShape shape) { }
