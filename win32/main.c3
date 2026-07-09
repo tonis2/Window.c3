@@ -561,3 +561,9 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
 
 	return surface;
 }
+
+// --- API parity with the darwin backend (real implementations TODO) ---
+fn float Window.get_scroll(&self) => 0;
+fn String Window.get_text(&self) => "";
+fn bool Window.should_close(&self) => false;
+fn void Window.set_cursor(&self, CursorShape shape) { }
