@@ -36,7 +36,7 @@ fn float[<2>] Window.getMousePos(self)
 	return self.src.mouse_pos;
 }
 
-fn EventMap Window.getEvent(&self)
+fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	JsEvent event;
 

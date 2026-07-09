@@ -111,7 +111,7 @@ fn float[<2>] Window.getMousePos(self)
 	return { (float)point.x, (float)point.y };
 }
 
-fn EventMap Window.getEvent(&self)
+fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	NSAutoreleasePool pool = new_object("NSAutoreleasePool");
 	pool.alloc();
@@ -121,7 +121,20 @@ fn EventMap Window.getEvent(&self)
 	NSString loop = new_object("NSString");
 	loop.stringWithUTF8String("kCFRunLoopDefaultMode");
 
-	NSDate until;
+	// A nil date makes nextEventMatchingMask return immediately when the queue
+	// is empty (a poll). When wait is set — an on-demand render loop asking to
+	// idle — the *first* fetch instead blocks on distantFuture: the thread
+	// sleeps in the kernel at 0% CPU until an event arrives, and input wakes
+	// it. Once woken, the remaining events are drained with the nil poll date
+	// so no edges are lost.
+	NSDate poll;
+	NSDate first = poll;
+	if (wait)
+	{
+		first = new_object("NSDate");
+		first.distantFuture();
+	}
+	bool is_first = true;
 
 	// Per-frame state: scroll and typed text accumulate over this call's
 	// events only; the latched key/button map persists across frames.
@@ -134,6 +147,8 @@ fn EventMap Window.getEvent(&self)
 	// per frame loses press/release edges and lags typing.
 	while (true)
 	{
+		NSDate until = is_first ? first : poll;
+		is_first = false;
 		NSEvent event = self.src.app.nextEventMatchingMask(long::max, until, loop, true);
 		if (!(void*)event) break;
 
