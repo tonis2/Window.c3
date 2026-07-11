@@ -63,7 +63,7 @@ fn Window? new(Params params, String name)
 
 	NSObject delegate = new_object("NSObject");
 	delegate.alloc_class_pair("WindowDelegate", 0);
-	delegate.add_ivar("NSWindow", @sizeof(win), math::log2(@sizeof(win)), "L")!!;
+	delegate.add_ivar("NSWindow", @sizeof(win), math::@intlog2(@sizeof(win)), "L")!!;
 	delegate.add_method("windowWillResize:toSize:", &resize_window, "{NSSize=ff}@:{NSSize=ff}")!!;
 	// delegate.add_method("windowDidMiniaturize::", &resize_window, "")!!;
 	// delegate.add_method("windowDidDeminiaturize::", &resize_window, "")!!;
