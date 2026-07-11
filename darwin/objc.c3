@@ -213,9 +213,18 @@ macro ObjcClass? ObjcClass.add_method(ObjcClass self, ZString name, void* imp, Z
 	return self;
 }
 
-macro NSObject? NSObject.add_ivar(NSObject self, ZString name, int size, double alignment, ZString types)
+// The std binding of class_addIvar (std::os::macos::objc) mistypes alignment
+// as double: the real C signature is uint8_t. The double rides in a float
+// register while the callee reads the integer registers, so the ivar gets
+// registered with the LOW BYTE OF THE TYPES POINTER as its log2 alignment and
+// a garbage types pointer — whenever the linker happens to place the types
+// string at an address whose low byte is >= 31, the ivar offset overflows to
+// 2^31 and the next setInstanceVariable crashes. Correctly-typed binding:
+extern fn bool class_add_ivar(ObjcClass cls, ZString name, usz size, char alignment, ZString types) @cname("class_addIvar");
+
+macro NSObject? NSObject.add_ivar(NSObject self, ZString name, usz size, char alignment, ZString types)
 {
-	if (!objc::class_addIvar(self.cls, name, size, alignment, types)) return IVAR_NOT_SET~;
+	if (!class_add_ivar(self.cls, name, size, alignment, types)) return IVAR_NOT_SET~;
 	return self;
 }
 
