@@ -227,7 +227,7 @@ alias VkSurface = void*;
 // loader. Left null, the system loader is opened by name as before.
 alias VkGetInstanceProcAddrFn = fn void*(void*, char*);
 
-fn void* Window.vk_proc(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr, void* vk_lib, char* name) @private
+fn void* Window.vk_proc(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr, void* vk_lib, char* name)
 {
 	if (get_instance_proc_addr != null) return get_instance_proc_addr(vk_instance, name);
 	return dlsym(vk_lib, name);
