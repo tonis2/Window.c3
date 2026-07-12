@@ -58,15 +58,15 @@ struct WaylandWindow
 	bool initialized;
 	EventMap event_map;
 	float[<2>] mouse_pos;
-	bool close_requested;   // set by the xdg_toplevel close event
-	double scroll_delta;    // accumulated over the last poll (points, + = up)
-	DString text;           // UTF-8/ASCII typed during the last poll
-	Pointer pointer;        // the seat pointer, needed to set the cursor shape
-	uint pointer_serial;    // serial of the latest pointer enter (for set_shape)
+	bool close_requested; // set by the xdg_toplevel close event
+	double scroll_delta; // accumulated over the last poll (points, + = up)
+	DString text; // UTF-8/ASCII typed during the last poll
+	Pointer pointer; // the seat pointer, needed to set the cursor shape
+	uint pointer_serial; // serial of the latest pointer enter (for set_shape)
 	Proxy cursor_shape_manager; // wp_cursor_shape_manager_v1, if the compositor has it
-	Proxy cursor_shape_device;  // wp_cursor_shape_device_v1, created lazily
+	Proxy cursor_shape_device; // wp_cursor_shape_device_v1, created lazily
 	XkbContext xkb_context; // libxkbcommon objects for layout-aware text input
-	XkbKeymap xkb_keymap;   // (null when libxkbcommon is unavailable)
+	XkbKeymap xkb_keymap; // (null when libxkbcommon is unavailable)
 	XkbState xkb_state;
 }
 
@@ -366,8 +366,12 @@ fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint size)
 	if (map == null || (iptr)map == -1) return; // MAP_FAILED is (void*)-1
 
 	if (data.xkb_context == null) data.xkb_context = xkb_context_new(0);
-	XkbKeymap keymap = data.xkb_context != null
-		? xkb_keymap_new_from_string(data.xkb_context, map, XKB_KEYMAP_FORMAT_TEXT_V1, 0)
+	XkbKeymap keymap = data.xkb_context != null ? xkb_keymap_new_from_string(
+		data.xkb_context,
+		map,
+		XKB_KEYMAP_FORMAT_TEXT_V1,
+		0
+	)
 		: null;
 	munmap(map, (sz)size);
 	if (keymap == null) return;
@@ -412,7 +416,7 @@ fn void kbKey(WaylandWindow* data, void* kb, uint serial, uint type, uint key, u
 		else
 		{
 			bool shift = data.event_map.is_pressed(LEFT_SHIFT) || data.event_map.is_pressed(RIGHT_SHIFT);
-			char c = linuxScancodeToText(scancode, shift);
+			char c     = linuxScancodeToText(scancode, shift);
 			if (c != 0) data.text.append_char(c);
 		}
 	}
@@ -541,7 +545,7 @@ PointerListener pointerListener = {
 	&noop,
 	&noop,
 	&noop
-	};
+};
 
 // Test if Wayland is available
 fn bool wayland_available()
@@ -570,8 +574,8 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	proxy_add_listener(registry, &registryListener, window);
 	rountrip(display);
 
-	assert (window.surface);
-	assert (window.shell);
+	assert(window.surface);
+	assert(window.shell);
 
 	// Get XDG surface
 	window.xdg_surface = proxy_marshal_flags(
@@ -583,7 +587,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		null,
 		window.surface
 	);
-	assert (window.xdg_surface);
+	assert(window.xdg_surface);
 	proxy_add_listener(window.xdg_surface, &shellSurfaceListener, window);
 
 	window.top_level = proxy_marshal_flags(
@@ -595,7 +599,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 		null
 	);
 	proxy_add_listener(window.top_level, &topSurfaceListener, window);
-	assert (window.top_level);
+	assert(window.top_level);
 	// Set title (opcode 2)
 	proxy_marshal_flags(window.top_level, 2, null, proxy_get_version(window.top_level), 0, name.ptr);
 	// Set app_id (opcode 3)
@@ -715,10 +719,7 @@ Interface wp_cursor_shape_manager_v1_interface = {
 	.events = null,
 };
 
-Message[*] cursor_shape_device_methods = {
-	{ "destroy", "", null },
-	{ "set_shape", "uu", null },
-};
+Message[*] cursor_shape_device_methods = { { "destroy", "", null }, { "set_shape", "uu", null }, };
 
 Interface wp_cursor_shape_device_v1_interface = {
 	.name = "wp_cursor_shape_device_v1",
@@ -734,15 +735,15 @@ fn uint wayland_cursor_shape_value(CursorShape shape)
 {
 	switch (shape)
 	{
-		case ARROW:         return 1;  // default
+		case ARROW: return 1;  // default
 		case POINTING_HAND: return 4;  // pointer
-		case IBEAM:         return 9;  // text
-		case CROSSHAIR:     return 8;  // crosshair
-		case OPEN_HAND:     return 16; // grab
-		case CLOSED_HAND:   return 17; // grabbing
-		case RESIZE_H:      return 26; // ew_resize
-		case RESIZE_V:      return 27; // ns_resize
-		default:            return 1;
+		case IBEAM: return 9;  // text
+		case CROSSHAIR: return 8;  // crosshair
+		case OPEN_HAND: return 16;  // grab
+		case CLOSED_HAND: return 17;  // grabbing
+		case RESIZE_H: return 26;  // ew_resize
+		case RESIZE_V: return 27;  // ns_resize
+		default: return 1;
 	}
 }
 
@@ -815,8 +816,20 @@ fn void wayland_free(WaylandWindow* self)
 {
 	self.text.free();
 	xkb_free(self.xkb_context, self.xkb_keymap, self.xkb_state);
-	if (self.cursor_shape_device)  proxy_marshal_flags(self.cursor_shape_device, 0, null, proxy_get_version(self.cursor_shape_device), WL_MARSHAL_FLAG_DESTROY);
-	if (self.cursor_shape_manager) proxy_marshal_flags(self.cursor_shape_manager, 0, null, proxy_get_version(self.cursor_shape_manager), WL_MARSHAL_FLAG_DESTROY);
+	if (self.cursor_shape_device) proxy_marshal_flags(
+		self.cursor_shape_device,
+		0,
+		null,
+		proxy_get_version(self.cursor_shape_device),
+		WL_MARSHAL_FLAG_DESTROY
+	);
+	if (self.cursor_shape_manager) proxy_marshal_flags(
+		self.cursor_shape_manager,
+		0,
+		null,
+		proxy_get_version(self.cursor_shape_manager),
+		WL_MARSHAL_FLAG_DESTROY
+	);
 	// proxy_destroy(self.src.keyboard);
 	proxy_marshal_flags(self.seat, 3, null, proxy_get_version(self.seat), WL_MARSHAL_FLAG_DESTROY);
 	proxy_marshal_flags(self.surface, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
