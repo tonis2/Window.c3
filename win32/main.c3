@@ -538,14 +538,30 @@ struct VkWin32SurfaceCreateInfo
 alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
 alias VkSurface = void*;
 
-fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
-{
-	void* vk_lib = loadLibraryA("vulkan-1.dll");
-	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
-	defer freeLibrary(vk_lib);
+// See the note in darwin/main.c3: a caller that links Vulkan itself passes
+// vkGetInstanceProcAddr in, which is the only way to reach a statically linked
+// loader. Left null, vulkan-1.dll is loaded by name as before.
+alias VkGetInstanceProcAddrFn = fn void*(void*, char*);
 
-	VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)getProcAddress(vk_lib, "vkCreateWin32SurfaceKHR");
-	if (create_fn == null) return FAILED_OPENING_WINDOW~;
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr = null)
+{
+	VkCreateSurfaceFn create_fn = null;
+	void* vk_lib = null;
+
+	if (get_instance_proc_addr != null)
+	{
+		create_fn = (VkCreateSurfaceFn)get_instance_proc_addr(vk_instance, "vkCreateWin32SurfaceKHR");
+	}
+
+	if (create_fn == null)
+	{
+		vk_lib = loadLibraryA("vulkan-1.dll");
+		if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+
+		create_fn = (VkCreateSurfaceFn)getProcAddress(vk_lib, "vkCreateWin32SurfaceKHR");
+		if (create_fn == null) return FAILED_OPENING_WINDOW~;
+	}
+	defer { if (vk_lib != null) freeLibrary(vk_lib); }
 
 	VkWin32SurfaceCreateInfo create_info = {
 		.sType = 1000009000,

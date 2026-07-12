@@ -222,11 +222,26 @@ struct VkXcbSurfaceCreateInfo
 alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
 alias VkSurface = void*;
 
-fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
+// See the note in darwin/main.c3: a caller that links Vulkan itself passes
+// vkGetInstanceProcAddr in, which is the only way to reach a statically linked
+// loader. Left null, the system loader is opened by name as before.
+alias VkGetInstanceProcAddrFn = fn void*(void*, char*);
+
+fn void* Window.vk_proc(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr, void* vk_lib, char* name) @private
 {
-	void* vk_lib = dlopen("libvulkan.so.1", RTLD_LAZY);
-	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
-	defer dlclose(vk_lib);
+	if (get_instance_proc_addr != null) return get_instance_proc_addr(vk_instance, name);
+	return dlsym(vk_lib, name);
+}
+
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr = null)
+{
+	void* vk_lib = null;
+	if (get_instance_proc_addr == null)
+	{
+		vk_lib = dlopen("libvulkan.so.1", RTLD_LAZY);
+		if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+	}
+	defer { if (vk_lib != null) dlclose(vk_lib); }
 
 	void* surface;
 
@@ -234,7 +249,7 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
 	{
 		case WAYLAND:
 			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
-			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateWaylandSurfaceKHR");
+			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)self.vk_proc(vk_instance, get_instance_proc_addr, vk_lib, "vkCreateWaylandSurfaceKHR");
 			if (create_fn == null) return FAILED_OPENING_WINDOW~;
 
 			VkWaylandSurfaceCreateInfo create_info = {
@@ -249,7 +264,7 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
 
 		case X11:
 			X11Window* x11 = (X11Window*)self.src.backend_data;
-			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateXcbSurfaceKHR");
+			VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)self.vk_proc(vk_instance, get_instance_proc_addr, vk_lib, "vkCreateXcbSurfaceKHR");
 			if (create_fn == null) return FAILED_OPENING_WINDOW~;
 
 			VkXcbSurfaceCreateInfo create_info = {
