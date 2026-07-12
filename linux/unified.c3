@@ -3,12 +3,9 @@ import std::io;
 
 extern fn char* getenv(char* name) @cname("getenv");
 
-
 // Dynamic library loading
 extern fn void* dlopen(char* filename, int flags) @cname("dlopen");
-
 extern fn void* dlsym(void* handle, char* symbol) @cname("dlsym");
-
 extern fn int dlclose(void* handle) @cname("dlclose");
 
 
@@ -144,37 +141,43 @@ fn Window? new(Params params, String name)
 	return result;
 }
 
-// Get mouse position
+// Get mouse position. The backends report window-relative coordinates with a
+// top-left origin (native to X11 and Wayland); the c3w contract — matching the
+// darwin/Cocoa backend that the reference renderer flips back — is bottom-left,
+// so the y is converted here against the window height.
 fn float[<2>] Window.getMousePos(self)
 {
+	float[<2>] pos;
 	switch (self.src.backend)
 	{
 		case WAYLAND:
-			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
-			return wayland_getMousePos(wl);
+			pos = wayland_getMousePos((WaylandWindow*)self.src.backend_data);
 		case X11:
-			X11Window* x11 = (X11Window*)self.src.backend_data;
-			return x11_getMousePos(x11);
+			pos = x11_getMousePos((X11Window*)self.src.backend_data);
 		default:
 			return { 0, 0 };
 	}
+	return { pos.x, self.height - pos.y };
 }
 
-// Get events
+// Get events. When wait is set (an on-demand render loop asking to idle), the
+// backend blocks on the first fetch until an event arrives, parking the thread
+// at ~0% CPU; otherwise it polls and returns immediately.
 fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	switch (self.src.backend)
 	{
 		case WAYLAND:
 			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
-			wayland_pollEvents(wl);
+			wayland_pollEvents(wl, wait);
 			return wl.event_map;
 		case X11:
 			X11Window* x11 = (X11Window*)self.src.backend_data;
-			x11_pollEvents(x11, &self.src.event_map);
+			x11_pollEvents(x11, wait);
+			return x11.event_map;
 		default:
+			return self.src.event_map;
 	}
-	return self.src.event_map;
 }
 
 // Free window resources
@@ -227,7 +230,7 @@ alias VkSurface = void*;
 // loader. Left null, the system loader is opened by name as before.
 alias VkGetInstanceProcAddrFn = fn void*(void*, char*);
 
-fn void* Window.vk_proc(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr, void* vk_lib, char* name) @private
+fn void* Window.vk_proc(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr, void* vk_lib, char* name)
 {
 	if (get_instance_proc_addr != null) return get_instance_proc_addr(vk_instance, name);
 	return dlsym(vk_lib, name);
@@ -284,8 +287,50 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstancePr
 	return surface;
 }
 
-// --- API parity with the darwin backend (real implementations TODO) ---
-fn float Window.get_scroll(&self) => 0;
-fn String Window.get_text(&self) => "";
-fn bool Window.should_close(&self) => false;
-fn void Window.set_cursor(&self, CursorShape shape) { }
+// --- API parity with the darwin backend ---
+
+// Accumulated scroll-wheel delta over the last getEvent call (+ = scroll up).
+fn float Window.get_scroll(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_get_scroll((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_get_scroll((X11Window*)self.src.backend_data);
+		default:      return 0;
+	}
+}
+
+// Text typed during the last getEvent call. Borrowed — valid until the next
+// getEvent. US-QWERTY only (see linux/main.c3).
+fn String Window.get_text(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_get_text((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_get_text((X11Window*)self.src.backend_data);
+		default:      return "";
+	}
+}
+
+// True once the window manager / compositor has asked the window to close.
+fn bool Window.should_close(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_should_close((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_should_close((X11Window*)self.src.backend_data);
+		default:      return false;
+	}
+}
+
+// Set the pointer cursor shape. X11 uses the cursor font; Wayland uses the
+// cursor-shape-v1 protocol and is a no-op if the compositor lacks it.
+fn void Window.set_cursor(&self, CursorShape shape)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_cursor((WaylandWindow*)self.src.backend_data, shape);
+		case X11:     x11_set_cursor((X11Window*)self.src.backend_data, shape);
+		default:      break;
+	}
+}
