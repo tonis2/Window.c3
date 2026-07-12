@@ -321,18 +321,36 @@ struct VkMetalSurfaceCreateInfo
 alias VkCreateSurfaceFn = fn int(void*, void*, void*, void*);
 alias VkSurface = void*;
 
-fn VkSurface? Window.create_vk_surface(&self, void* vk_instance)
-{
-	void* vk_lib = dlopen("libvulkan.1.dylib", RTLD_LAZY);
-	if (vk_lib == null)
-	{
-		vk_lib = dlopen("libMoltenVK.dylib", RTLD_LAZY);
-	}
-	if (vk_lib == null) return FAILED_OPENING_WINDOW~;
-	defer dlclose(vk_lib);
+// Callers that link Vulkan themselves pass vkGetInstanceProcAddr in. This is not
+// a convenience: a statically linked loader is built with hidden visibility, so
+// its symbols cannot be reached with dlsym -- there is no library to open and no
+// exported symbol to find. Left null, the old behaviour stands and the system
+// loader is opened by name.
+alias VkGetInstanceProcAddrFn = fn void*(void*, char*);
 
-	VkCreateSurfaceFn create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateMetalSurfaceEXT");
-	if (create_fn == null) return FAILED_OPENING_WINDOW~;
+fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstanceProcAddrFn get_instance_proc_addr = null)
+{
+	VkCreateSurfaceFn create_fn = null;
+	void* vk_lib = null;
+
+	if (get_instance_proc_addr != null)
+	{
+		create_fn = (VkCreateSurfaceFn)get_instance_proc_addr(vk_instance, "vkCreateMetalSurfaceEXT");
+	}
+
+	if (create_fn == null)
+	{
+		vk_lib = dlopen("libvulkan.1.dylib", RTLD_LAZY);
+		if (vk_lib == null)
+		{
+			vk_lib = dlopen("libMoltenVK.dylib", RTLD_LAZY);
+		}
+		if (vk_lib == null) return FAILED_OPENING_WINDOW~;
+
+		create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateMetalSurfaceEXT");
+		if (create_fn == null) return FAILED_OPENING_WINDOW~;
+	}
+	defer { if (vk_lib != null) dlclose(vk_lib); }
 
 	VkMetalSurfaceCreateInfo create_info = {
 		.sType = 1000217000,
