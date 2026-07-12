@@ -58,6 +58,16 @@ struct WaylandWindow
 	bool initialized;
 	EventMap event_map;
 	float[<2>] mouse_pos;
+	bool close_requested;   // set by the xdg_toplevel close event
+	double scroll_delta;    // accumulated over the last poll (points, + = up)
+	DString text;           // UTF-8/ASCII typed during the last poll
+	Pointer pointer;        // the seat pointer, needed to set the cursor shape
+	uint pointer_serial;    // serial of the latest pointer enter (for set_shape)
+	Proxy cursor_shape_manager; // wp_cursor_shape_manager_v1, if the compositor has it
+	Proxy cursor_shape_device;  // wp_cursor_shape_device_v1, created lazily
+	XkbContext xkb_context; // libxkbcommon objects for layout-aware text input
+	XkbKeymap xkb_keymap;   // (null when libxkbcommon is unavailable)
+	XkbState xkb_state;
 }
 
 struct WLArray
@@ -205,6 +215,7 @@ extern fn int close_fd(int fd) @cname("close");
 const int PROT_READ               = 1;
 const int PROT_WRITE              = 2;
 const int MAP_SHARED              = 1;
+const int MAP_PRIVATE             = 2;
 const uint WL_SHM_FORMAT_ARGB8888 = 0;
 
 // Library handle
@@ -256,6 +267,9 @@ fn bool wayland_load()
 	set_fullscreen[0] = wl_output_interface;
 	grab[0] = wl_seat_interface;
 
+	// cursor-shape-v1: fill the wl_pointer type slot for get_pointer.
+	cursor_shape_get_pointer[1] = wl_pointer_interface;
+
 	return true;
 }
 
@@ -300,8 +314,9 @@ fn void shellSurfaceConfigure(WaylandWindow* window, XDG_surface surface, uint s
 
 fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
 {
-	// Window closed
-	// data.open = false;
+	// The compositor asked the toplevel to close (title-bar button, etc).
+	// Latched and reported through Window.should_close.
+	data.close_requested = true;
 }
 
 fn void topSurfaceConfigure(WaylandWindow* data, XDG_top_level top_level, int width, int height, void* states)
@@ -326,6 +341,7 @@ fn void seatCapabilities(WaylandWindow* data, Seat seat, uint capabilities)
 	{
 		Pointer pointer = proxy_marshal_flags(seat, 0, wl_pointer_interface, proxy_get_version(seat), 0, null);
 		proxy_add_listener(pointer, &pointerListener, data);
+		data.pointer = pointer;
 	}
 }
 
@@ -336,6 +352,31 @@ fn void seatName(WaylandWindow* data, Seat seat, char* name)
 
 fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint size)
 {
+	// The compositor hands us the keyboard layout as an XKB keymap over a shared
+	// fd. Build an xkb_state from it so kbKey can decode real typed text; if
+	// libxkbcommon is missing kbKey falls back to the US-QWERTY table.
+	if (frmt != XKB_KEYMAP_FORMAT_TEXT_V1 || !xkb_load())
+	{
+		close_fd(fd);
+		return;
+	}
+
+	char* map = mmap(null, (sz)size, PROT_READ, MAP_PRIVATE, fd, 0);
+	close_fd(fd);
+	if (map == null || (iptr)map == -1) return; // MAP_FAILED is (void*)-1
+
+	if (data.xkb_context == null) data.xkb_context = xkb_context_new(0);
+	XkbKeymap keymap = data.xkb_context != null
+		? xkb_keymap_new_from_string(data.xkb_context, map, XKB_KEYMAP_FORMAT_TEXT_V1, 0)
+		: null;
+	munmap(map, (sz)size);
+	if (keymap == null) return;
+
+	// Replace any keymap from a previous layout change.
+	if (data.xkb_state != null) xkb_state_unref(data.xkb_state);
+	if (data.xkb_keymap != null) xkb_keymap_unref(data.xkb_keymap);
+	data.xkb_keymap = keymap;
+	data.xkb_state = xkb_state_new(keymap);
 }
 fn void kbEnter(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys)
 {
@@ -349,15 +390,39 @@ fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, voi
 
 fn void kbKey(WaylandWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
-	EventKey keyboard_key = linuxScancodeToEventKey(key + 8);
+	// Wayland reports the raw evdev keycode; the unified tables use the X11
+	// convention (evdev + 8).
+	uint scancode = key + 8;
+
+	EventKey keyboard_key = linuxScancodeToEventKey(scancode);
 	if (keyboard_key != EMPTY_KEY)
 	{
 		data.event_map.set(keyboard_key, (bool)state);
+	}
+
+	// Typed text: printable characters on key-down only. Prefer the layout-aware
+	// xkb decode; fall back to the US-QWERTY table when libxkbcommon is absent,
+	// reading shift from the latched map (updated by the shift key's own event).
+	if (state == 1)
+	{
+		if (data.xkb_state != null)
+		{
+			xkb_append_text(data.xkb_state, scancode, &data.text);
+		}
+		else
+		{
+			bool shift = data.event_map.is_pressed(LEFT_SHIFT) || data.event_map.is_pressed(RIGHT_SHIFT);
+			char c = linuxScancodeToText(scancode, shift);
+			if (c != 0) data.text.append_char(c);
+		}
 	}
 }
 
 fn void kbMod(WaylandWindow* data, Keyboard kb, uint serial, uint dep, uint lat, uint lock, uint group)
 {
+	// The compositor is authoritative for modifier state on Wayland; feed it to
+	// xkb so the next key decodes at the right shift/caps/AltGr level.
+	if (data.xkb_state != null) xkb_state_update_mask(data.xkb_state, dep, lat, lock, 0, 0, group);
 }
 fn void kbRep(WaylandWindow* data, Keyboard kb, int rate, int del)
 {
@@ -365,6 +430,8 @@ fn void kbRep(WaylandWindow* data, Keyboard kb, int rate, int del)
 
 fn void pointerEnter(WaylandWindow* data, Pointer pointer, int serial, Surface surface, int x, int y)
 {
+	// The enter serial is required to set the cursor shape for this pointer.
+	data.pointer_serial = (uint)serial;
 }
 fn void pointerLeave(WaylandWindow* data, Pointer pointer, int serial, Surface surface)
 {
@@ -372,7 +439,9 @@ fn void pointerLeave(WaylandWindow* data, Pointer pointer, int serial, Surface s
 
 fn void pointerMotion(WaylandWindow* data, Pointer pointer, uint time, int x, int y)
 {
-	data.mouse_pos = { (float)fixed_to_double(x), -(float)fixed_to_double(y) };
+	// Surface-local coordinates, top-left origin. Window.getMousePos converts to
+	// the bottom-left convention the darwin backend and reference renderer use.
+	data.mouse_pos = { (float)fixed_to_double(x), (float)fixed_to_double(y) };
 }
 
 fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint time, uint button, uint state)
@@ -398,15 +467,15 @@ fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint tim
 
 fn void pointerAxis(WaylandWindow* data, Pointer pointer, uint time, uint axis, int value)
 {
-	// Mouse scroll event
-	if (value > 0)
-	{
-		data.event_map.set(MOUSE_SCROLL_UP, true);
-	}
-	else
-	{
-		data.event_map.set(MOUSE_SCROLL_DOWN, true);
-	}
+	// axis 0 is vertical scroll; horizontal is ignored for now.
+	if (axis != 0 || value == 0) return;
+
+	// wl_pointer.axis: a positive value is a *downward* scroll. Negate so that a
+	// wheel-up gives a positive delta, matching X11 (button 4) and the darwin
+	// backend's convention where positive == scroll up.
+	double delta = -fixed_to_double(value);
+	data.scroll_delta += delta;
+	data.event_map.set(delta > 0 ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN, true);
 }
 
 
@@ -435,6 +504,11 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 	{
 		window.seat = registry_bind(registry, wl_seat_interface, name, version);
 		proxy_add_listener(window.seat, &seatListener, window);
+	}
+
+	if (action_name == "wp_cursor_shape_manager_v1")
+	{
+		window.cursor_shape_manager = registry_bind(registry, &wp_cursor_shape_manager_v1_interface, name, 1);
 	}
 }
 
@@ -489,6 +563,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	if (display == null) return FAILED_OPENING_WINDOW~;
 
 	window.display = display;
+	window.text = dstring::new(mem);
 
 	Registry registry = get_registry(display);
 	if (registry == null) return FAILED_OPENING_WINDOW~;
@@ -615,11 +690,104 @@ fn float[<2>] wayland_getMousePos(WaylandWindow* self)
 	return self.mouse_pos;
 }
 
-fn void wayland_pollEvents(WaylandWindow* self)
+fn float wayland_get_scroll(WaylandWindow* self) => (float)self.scroll_delta;
+fn String wayland_get_text(WaylandWindow* self) => self.text.str_view();
+fn bool wayland_should_close(WaylandWindow* self) => self.close_requested;
+
+// --- cursor-shape-v1 protocol (server-side named cursors) ---
+// Definitions mirror the xdg_shell.c3 style. The get_pointer type slot for the
+// wl_pointer argument is patched with the real wl_pointer_interface in
+// wayland_load(), once dlsym has resolved it.
+Interface*[*] cursor_shape_get_pointer = { &wp_cursor_shape_device_v1_interface, null };
+
+Message[*] cursor_shape_manager_methods = {
+	{ "destroy", "", null },
+	{ "get_pointer", "no", &cursor_shape_get_pointer },
+	{ "get_tablet_tool_v2", "no", null },
+};
+
+Interface wp_cursor_shape_manager_v1_interface = {
+	.name = "wp_cursor_shape_manager_v1",
+	.version = 1,
+	.method_count = cursor_shape_manager_methods.len,
+	.methods = &cursor_shape_manager_methods,
+	.event_count = 0,
+	.events = null,
+};
+
+Message[*] cursor_shape_device_methods = {
+	{ "destroy", "", null },
+	{ "set_shape", "uu", null },
+};
+
+Interface wp_cursor_shape_device_v1_interface = {
+	.name = "wp_cursor_shape_device_v1",
+	.version = 1,
+	.method_count = cursor_shape_device_methods.len,
+	.methods = &cursor_shape_device_methods,
+	.event_count = 0,
+	.events = null,
+};
+
+// wp_cursor_shape_device_v1.shape values (follow the CSS cursor names).
+fn uint wayland_cursor_shape_value(CursorShape shape)
 {
-	// Reset mouse scroll
+	switch (shape)
+	{
+		case ARROW:         return 1;  // default
+		case POINTING_HAND: return 4;  // pointer
+		case IBEAM:         return 9;  // text
+		case CROSSHAIR:     return 8;  // crosshair
+		case OPEN_HAND:     return 16; // grab
+		case CLOSED_HAND:   return 17; // grabbing
+		case RESIZE_H:      return 26; // ew_resize
+		case RESIZE_V:      return 27; // ns_resize
+		default:            return 1;
+	}
+}
+
+fn void wayland_set_cursor(WaylandWindow* self, CursorShape shape)
+{
+	// No-op when the compositor lacks cursor-shape-v1 or the pointer has never
+	// entered the surface (no serial to authorize the change).
+	if (self.cursor_shape_manager == null || self.pointer == null || self.pointer_serial == 0) return;
+
+	if (self.cursor_shape_device == null)
+	{
+		// wp_cursor_shape_manager_v1.get_pointer(id, pointer) → opcode 1
+		self.cursor_shape_device = proxy_marshal_flags(
+			self.cursor_shape_manager,
+			1,
+			&wp_cursor_shape_device_v1_interface,
+			proxy_get_version(self.cursor_shape_manager),
+			0,
+			null,
+			self.pointer
+		);
+	}
+	if (self.cursor_shape_device == null) return;
+
+	// wp_cursor_shape_device_v1.set_shape(serial, shape) → opcode 1
+	proxy_marshal_flags(
+		self.cursor_shape_device,
+		1,
+		null,
+		proxy_get_version(self.cursor_shape_device),
+		0,
+		self.pointer_serial,
+		wayland_cursor_shape_value(shape)
+	);
+	display_flush(self.display);
+}
+
+fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
+{
+	// Per-frame state: scroll and typed text accumulate over this call only; the
+	// latched key/button map persists across frames.
 	self.event_map.set(MOUSE_SCROLL_UP, false);
 	self.event_map.set(MOUSE_SCROLL_DOWN, false);
+	self.scroll_delta = 0;
+	self.text.clear();
 
 	// Non-blocking event dispatch
 	while (prepare_read(self.display) != 0)
@@ -628,8 +796,10 @@ fn void wayland_pollEvents(WaylandWindow* self)
 	}
 	display_flush(self.display);
 
+	// wait == true (on-demand idle): block in poll() until an event arrives so
+	// the thread parks at ~0% CPU; a nil timeout otherwise polls and returns.
 	PollFd pfd = { .fd = display_get_fd(self.display), .events = POLLIN, .revents = 0 };
-	if (poll(&pfd, 1, 0) > 0)
+	if (poll(&pfd, 1, wait ? -1 : 0) > 0)
 	{
 		read_events(self.display);
 	}
@@ -643,6 +813,10 @@ fn void wayland_pollEvents(WaylandWindow* self)
 // Free and destroys window instance
 fn void wayland_free(WaylandWindow* self)
 {
+	self.text.free();
+	xkb_free(self.xkb_context, self.xkb_keymap, self.xkb_state);
+	if (self.cursor_shape_device)  proxy_marshal_flags(self.cursor_shape_device, 0, null, proxy_get_version(self.cursor_shape_device), WL_MARSHAL_FLAG_DESTROY);
+	if (self.cursor_shape_manager) proxy_marshal_flags(self.cursor_shape_manager, 0, null, proxy_get_version(self.cursor_shape_manager), WL_MARSHAL_FLAG_DESTROY);
 	// proxy_destroy(self.src.keyboard);
 	proxy_marshal_flags(self.seat, 3, null, proxy_get_version(self.seat), WL_MARSHAL_FLAG_DESTROY);
 	proxy_marshal_flags(self.surface, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
