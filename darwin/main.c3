@@ -96,6 +96,13 @@ fn Window? new(Params params, String name)
 	view.wants_Layer(true);
 	win.set_view(view);
 
+	// A layer attached by hand makes the view layer-HOSTING: AppKit leaves the
+	// layer's contentsScale at 1.0, so on a retina display the Metal drawable
+	// would be half the window's physical resolution and every frame upscaled.
+	// Match the window's backing scale — CAMetalLayer then derives drawableSize
+	// as bounds * contentsScale, and the Vulkan surface reports that size.
+	layer.set_contents_scale(win.backing_scale_factor());
+
 	Window response = {
 		.src = { .window = win, .app = app, .view = view, .layer = layer, .text = dstring::new(mem) },
 		.width = params.width,
