@@ -312,6 +312,21 @@ fn String Window.get_text(&self)
 	}
 }
 
+// Framebuffer pixels per logical window unit (1.0 on standard-density
+// displays). On Wayland this is the highest scale of the connected outputs and
+// the surface's buffer scale is already declared to match — render buffers at
+// logical size * scale, or the compositor scales them and text blurs. Window
+// size, mouse coordinates and the Params stay in logical units.
+fn float Window.get_scale(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_get_scale((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_get_scale((X11Window*)self.src.backend_data);
+		default:      return 1.0;
+	}
+}
+
 // True once the window manager / compositor has asked the window to close.
 fn bool Window.should_close(&self)
 {

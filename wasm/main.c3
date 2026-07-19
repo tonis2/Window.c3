@@ -234,3 +234,4 @@ fn float Window.get_scroll(&self) => 0;
 fn String Window.get_text(&self) => "";
 fn bool Window.should_close(&self) => false;
 fn void Window.set_cursor(&self, CursorShape shape) { }
+fn float Window.get_scale(&self) => 1.0;
