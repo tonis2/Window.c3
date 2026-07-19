@@ -506,6 +506,11 @@ fn float x11_get_scroll(X11Window* self) => (float)self.scroll_delta;
 fn String x11_get_text(X11Window* self) => self.text.str_view();
 fn bool x11_should_close(X11Window* self) => self.close_requested;
 
+// X11 windows are already in physical pixels (no compositor-side scaling on a
+// native X11 session), so there is nothing to compensate for. A DPI-aware
+// scale would come from Xft.dpi; not consulted yet.
+fn float x11_get_scale(X11Window* self) => 1.0;
+
 // X11 cursorfont glyph ids (from X11/cursorfont.h) for each unified shape.
 fn uint x11_cursor_font(CursorShape shape)
 {

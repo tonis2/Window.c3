@@ -277,6 +277,12 @@ fn String Window.get_text(&self) => self.src.text.str_view();
 // True once the user has clicked the window's close button.
 fn bool Window.should_close(&self) => close_requested;
 
+// Framebuffer pixels per window point. The CAMetalLayer keeps its default
+// contentsScale of 1.0, so the drawable already matches the logical size and
+// nothing needs compensating — this is the behavior the renderer is built
+// against on macOS.
+fn float Window.get_scale(&self) => 1.0;
+
 fn void Window.set_cursor(&self, CursorShape shape)
 {
 	ObjcClass cls = objc::getClass("NSCursor");

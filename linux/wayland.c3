@@ -68,6 +68,10 @@ struct WaylandWindow
 	XkbContext xkb_context; // libxkbcommon objects for layout-aware text input
 	XkbKeymap xkb_keymap; // (null when libxkbcommon is unavailable)
 	XkbState xkb_state;
+	int buffer_scale; // highest wl_output scale seen; buffers are rendered
+	// at this factor so the compositor never upscales them
+	Proxy[8] outputs; // bound wl_outputs, destroyed in wayland_free
+	int output_count;
 }
 
 struct WLArray
@@ -124,6 +128,20 @@ struct PointerListener
 	void* axis_disc;
 	void* axis_value;
 	void* random;
+}
+
+alias OutputScaleEvent = fn void(WaylandWindow* data, void* output, int factor);
+
+// wl_output events in protocol order (v4): geometry, mode, done, scale, name,
+// description. Only scale is consumed.
+struct OutputListener
+{
+	void* geometry;
+	void* mode;
+	void* done;
+	OutputScaleEvent scale;
+	void* name;
+	void* description;
 }
 
 struct MouseParams
@@ -483,6 +501,15 @@ fn void pointerAxis(WaylandWindow* data, Pointer pointer, uint time, uint axis, 
 }
 
 
+fn void outputScale(WaylandWindow* data, void* output, int factor)
+{
+	// Highest scale of any connected output wins: buffers are rendered once at
+	// that factor and the compositor downscales them on lower-density outputs,
+	// which stays sharp — upscaling (a scale-1 buffer on a scale-2 output)
+	// is what blurs.
+	if (factor > data.buffer_scale) data.buffer_scale = factor;
+}
+
 fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char* interface_name, uint version)
 {
 	String action_name = ((ZString)interface_name).str_view();
@@ -514,6 +541,15 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 	{
 		window.cursor_shape_manager = registry_bind(registry, &wp_cursor_shape_manager_v1_interface, name, 1);
 	}
+
+	if (action_name == "wl_output")
+	{
+		// The scale event needs v2; cap at v4, the newest revision the
+		// OutputListener slots cover.
+		Proxy output = registry_bind(registry, wl_output_interface, name, version > 4 ? 4 : version);
+		proxy_add_listener(output, &outputListener, window);
+		if (window.output_count < window.outputs.len) window.outputs[window.output_count++] = output;
+	}
 }
 
 KeyboardListener keyboardListener = { &kbMap, &kbEnter, &kbLeave, &kbKey, &kbMod, &kbRep };
@@ -532,6 +568,8 @@ TopSurfaceListener topSurfaceListener = {
 };
 
 SeatListener seatListener = { &seatCapabilities, &seatName, };
+
+OutputListener outputListener = { &noop, &noop, &noop, &outputScale, &noop, &noop };
 
 PointerListener pointerListener = {
 	&pointerEnter,
@@ -568,6 +606,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 	window.display = display;
 	window.text = dstring::new(mem);
+	window.buffer_scale = 1;
 
 	Registry registry = get_registry(display);
 	if (registry == null) return FAILED_OPENING_WINDOW~;
@@ -576,6 +615,25 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 	assert(window.surface);
 	assert(window.shell);
+
+	// The wl_outputs bound during the dispatch above have their own events
+	// (including scale) still in flight; one more roundtrip collects them
+	// before the buffer scale is chosen.
+	rountrip(display);
+
+	// Declare the buffer scale so the compositor composites 1:1 instead of
+	// upscaling (which blurs text on HiDPI outputs). Needs wl_surface >= 3;
+	// reported through get_scale so the renderer sizes its framebuffer to
+	// logical size * scale.
+	if (window.buffer_scale > 1 && proxy_get_version(window.surface) >= 3)
+	{
+		// wl_surface.set_buffer_scale(scale) → opcode 8
+		proxy_marshal_flags(window.surface, 8, null, proxy_get_version(window.surface), 0, window.buffer_scale);
+	}
+	else
+	{
+		window.buffer_scale = 1;
+	}
 
 	// Get XDG surface
 	window.xdg_surface = proxy_marshal_flags(
@@ -612,11 +670,15 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	surface_commit(window.surface);
 	rountrip(display);
 
-	// Create a shared memory buffer so the window is visible
+	// Create a shared memory buffer so the window is visible. Buffer pixels are
+	// physical (scale times the logical params size): with set_buffer_scale
+	// above, this is what keeps the window's logical size at params.
 	if (window.shm)
 	{
-		int stride   = params.width * 4;
-		int buf_size = stride * params.height;
+		int buf_width  = params.width * window.buffer_scale;
+		int buf_height = params.height * window.buffer_scale;
+		int stride     = buf_width * 4;
+		int buf_size   = stride * buf_height;
 
 		ZString shm_name = "wl_shm";
 		int fd           = memfd_create(shm_name, 0);
@@ -655,8 +717,8 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 			0,
 			null,
 			0,
-			params.width,
-			params.height,
+			buf_width,
+			buf_height,
 			stride,
 			WL_SHM_FORMAT_ARGB8888
 		);
@@ -697,6 +759,7 @@ fn float[<2>] wayland_getMousePos(WaylandWindow* self)
 fn float wayland_get_scroll(WaylandWindow* self) => (float)self.scroll_delta;
 fn String wayland_get_text(WaylandWindow* self) => self.text.str_view();
 fn bool wayland_should_close(WaylandWindow* self) => self.close_requested;
+fn float wayland_get_scale(WaylandWindow* self) => (float)self.buffer_scale;
 
 // --- cursor-shape-v1 protocol (server-side named cursors) ---
 // Definitions mirror the xdg_shell.c3 style. The get_pointer type slot for the
@@ -830,6 +893,7 @@ fn void wayland_free(WaylandWindow* self)
 		proxy_get_version(self.cursor_shape_manager),
 		WL_MARSHAL_FLAG_DESTROY
 	);
+	for (int i = 0; i < self.output_count; i++) proxy_destroy(self.outputs[i]);
 	// proxy_destroy(self.src.keyboard);
 	proxy_marshal_flags(self.seat, 3, null, proxy_get_version(self.seat), WL_MARSHAL_FLAG_DESTROY);
 	proxy_marshal_flags(self.surface, 0, null, proxy_get_version(self.surface), WL_MARSHAL_FLAG_DESTROY);
