@@ -284,11 +284,11 @@ fn String Window.get_text(&self) => self.src.text.str_view();
 // True once the user has clicked the window's close button.
 fn bool Window.should_close(&self) => close_requested;
 
-// Framebuffer pixels per window point. The CAMetalLayer keeps its default
-// contentsScale of 1.0, so the drawable already matches the logical size and
-// nothing needs compensating — this is the behavior the renderer is built
-// against on macOS.
-fn float Window.get_scale(&self) => 1.0;
+// Framebuffer pixels per window point: the window's backing scale factor
+// (2.0 on retina). new() sets the CAMetalLayer's contentsScale to the same
+// value, so the Metal drawable — and the Vulkan surface made from it — is
+// this factor times the logical size; render buffers must match.
+fn float Window.get_scale(&self) => (float)self.src.window.backing_scale_factor();
 
 fn void Window.set_cursor(&self, CursorShape shape)
 {
