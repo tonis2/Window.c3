@@ -72,6 +72,8 @@ struct WaylandWindow
 	// at this factor so the compositor never upscales them
 	Proxy[8] outputs; // bound wl_outputs, destroyed in wayland_free
 	int output_count;
+	Proxy decoration_manager; // zxdg_decoration_manager_v1, if the compositor has it
+	Proxy toplevel_decoration; // this window's decoration object (server-side titlebar)
 }
 
 struct WLArray
@@ -542,6 +544,11 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 		window.cursor_shape_manager = registry_bind(registry, &wp_cursor_shape_manager_v1_interface, name, 1);
 	}
 
+	if (action_name == "zxdg_decoration_manager_v1")
+	{
+		window.decoration_manager = registry_bind(registry, &zxdg_decoration_manager_v1_interface, name, 1);
+	}
+
 	if (action_name == "wl_output")
 	{
 		// The scale event needs v2; cap at v4, the newest revision the
@@ -666,6 +673,30 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	proxy_marshal_flags(window.top_level, 7, null, proxy_get_version(window.top_level), 0, params.width, params.height);
 	// Set min size (opcode 8)
 	proxy_marshal_flags(window.top_level, 8, null, proxy_get_version(window.top_level), 0, params.width, params.height);
+
+	// A bare xdg_toplevel has no title bar, so nothing to drag or close the
+	// window with. Ask the compositor to draw one (server-side decorations).
+	// KDE and wlroots compositors honor this; GNOME lacks the protocol and the
+	// window stays undecorated there (Super+drag / Alt+F4 still work). Must be
+	// requested before the toplevel gets its first buffer.
+	if (window.decoration_manager)
+	{
+		// zxdg_decoration_manager_v1.get_toplevel_decoration(id, toplevel) → opcode 1
+		window.toplevel_decoration = proxy_marshal_flags(
+			window.decoration_manager,
+			1,
+			&zxdg_toplevel_decoration_v1_interface,
+			proxy_get_version(window.decoration_manager),
+			0,
+			null,
+			window.top_level
+		);
+		// zxdg_toplevel_decoration_v1.set_mode(mode) → opcode 1, 2 = server-side
+		if (window.toplevel_decoration)
+		{
+			proxy_marshal_flags(window.toplevel_decoration, 1, null, proxy_get_version(window.toplevel_decoration), 0, 2);
+		}
+	}
 
 	surface_commit(window.surface);
 	rountrip(display);
@@ -793,6 +824,42 @@ Interface wp_cursor_shape_device_v1_interface = {
 	.events = null,
 };
 
+// --- xdg-decoration-unstable-v1 protocol (server-side window decorations) ---
+Interface*[*] decoration_get_toplevel_types = { &zxdg_toplevel_decoration_v1_interface, &xdg_toplevel_interface };
+
+Message[*] decoration_manager_methods = {
+	{ "destroy", "", null },
+	{ "get_toplevel_decoration", "no", &decoration_get_toplevel_types },
+};
+
+Interface zxdg_decoration_manager_v1_interface = {
+	.name = "zxdg_decoration_manager_v1",
+	.version = 1,
+	.method_count = decoration_manager_methods.len,
+	.methods = &decoration_manager_methods,
+	.event_count = 0,
+	.events = null,
+};
+
+Message[*] toplevel_decoration_methods = {
+	{ "destroy", "", null },
+	{ "set_mode", "u", null },
+	{ "unset_mode", "", null },
+};
+
+// The configure(mode) event needs a signature entry to demarshal, but no
+// listener: whichever mode the compositor picks, the client draws nothing.
+Message[*] toplevel_decoration_events = { { "configure", "u", null }, };
+
+Interface zxdg_toplevel_decoration_v1_interface = {
+	.name = "zxdg_toplevel_decoration_v1",
+	.version = 1,
+	.method_count = toplevel_decoration_methods.len,
+	.methods = &toplevel_decoration_methods,
+	.event_count = toplevel_decoration_events.len,
+	.events = &toplevel_decoration_events,
+};
+
 // wp_cursor_shape_device_v1.shape values (follow the CSS cursor names).
 fn uint wayland_cursor_shape_value(CursorShape shape)
 {
@@ -891,6 +958,20 @@ fn void wayland_free(WaylandWindow* self)
 		0,
 		null,
 		proxy_get_version(self.cursor_shape_manager),
+		WL_MARSHAL_FLAG_DESTROY
+	);
+	if (self.toplevel_decoration) proxy_marshal_flags(
+		self.toplevel_decoration,
+		0,
+		null,
+		proxy_get_version(self.toplevel_decoration),
+		WL_MARSHAL_FLAG_DESTROY
+	);
+	if (self.decoration_manager) proxy_marshal_flags(
+		self.decoration_manager,
+		0,
+		null,
+		proxy_get_version(self.decoration_manager),
 		WL_MARSHAL_FLAG_DESTROY
 	);
 	for (int i = 0; i < self.output_count; i++) proxy_destroy(self.outputs[i]);
