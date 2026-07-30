@@ -163,7 +163,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 		DarwinEventType? event_type_opt = runtime::@enum_lookup(DarwinEventType, "value", (uint)type);
 		if (catch event_type_opt)
 		{
-			self.src.window.sendEvent(event);
+			self.src.app.sendEvent(event);
 			continue;
 		}
 		switch (event_type_opt)
@@ -266,7 +266,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				{
 				};
 		}
-		self.src.window.sendEvent(event);
+		// Dispatch through NSApp, not the window: app-level events (activation,
+		// screen changes, the undocumented ProcessNotification type) have no
+		// window to route to, and -[NSWindow sendEvent:] logs "Unrecognized
+		// event type" for them. NSApplication routes window events onward.
+		self.src.app.sendEvent(event);
 	}
 
 	self.src.app.updateWindows();
