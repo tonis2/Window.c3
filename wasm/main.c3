@@ -231,6 +231,12 @@ fn EventKey jsMouseToEventKey(uint button)
 
 // --- API parity with the darwin backend (real implementations TODO) ---
 fn float Window.get_scroll(&self) => 0;
+
+// Both unimplemented alongside get_scroll: the JS bridge does not forward wheel
+// events yet, so there is no delta to report and nothing to say about where it
+// came from.
+fn float Window.get_scroll_x(&self) => 0;
+fn bool Window.get_scroll_precise(&self) => false;
 fn String Window.get_text(&self) => "";
 fn bool Window.should_close(&self) => false;
 fn void Window.set_cursor(&self, CursorShape shape) { }

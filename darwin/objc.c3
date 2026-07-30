@@ -19,6 +19,10 @@ alias SendSize = fn void*(void*, ObjcSelector, NSSize);
 alias SendString = fn void*(void*, ObjcSelector, ZString);
 alias GetInt = fn int(void*, ObjcSelector);
 alias GetDouble = fn double(void*, ObjcSelector);
+// Objective-C BOOL is a signed char, so only the low byte of the return
+// register is defined — reading one back as an int picks up whatever was in the
+// rest of it. Same family of arm64 return-ABI trap as get_scrolling_delta below.
+alias GetBool = fn char(void*, ObjcSelector);
 // alias GetView = fn NSView(void*, ObjcSelector);
 alias GetRect = fn NSRect(void*, ObjcSelector);
 alias GetCharacters = fn NSString(void*, ObjcSelector);
@@ -252,6 +256,24 @@ fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifier
 // scrollingDeltaY returns CGFloat — must be read through a double-returning
 // call (get_scroll above reads it as int, which returns garbage on arm64).
 fn double NSEvent.get_scrolling_delta(self) => objc::msg_send(self, GetDouble, "scrollingDeltaY");
+
+// The horizontal half of the same gesture. A wheel mouse never sets it; a
+// trackpad's two-finger swipe fills in both axes, which is the whole reason a
+// scroll is a vector here rather than a number.
+fn double NSEvent.get_scrolling_delta_x(self) => objc::msg_send(self, GetDouble, "scrollingDeltaX");
+
+<*
+ Whether this scroll came from a surface that reports pixels rather than
+ detents — a trackpad or a Magic Mouse, as against a wheel that clicks.
+
+ Worth surfacing because the two are not the same quantity in different units.
+ A wheel notch is one event worth roughly a unit; a trackpad flick is a stream
+ of events worth tens of points between two frames. Anything that scales a
+ scroll — a zoom especially — has to know which it is holding, or it is calm
+ under one input device and violent under the other.
+*>
+fn bool NSEvent.has_precise_scrolling_deltas(self)
+	=> objc::msg_send(self, GetBool, "hasPreciseScrollingDeltas") != 0;
 
 // The typed characters of a key event as UTF-8. Goes through the NSString id
 // directly: returning the 16-byte NSString struct from msgSend (as
