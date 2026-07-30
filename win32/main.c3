@@ -580,6 +580,12 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstancePr
 
 // --- API parity with the darwin backend (real implementations TODO) ---
 fn float Window.get_scroll(&self) => 0;
+
+// Both unimplemented alongside get_scroll: this backend does not read
+// WM_MOUSEWHEEL or WM_MOUSEHWHEEL yet, so there is no delta to report and
+// nothing to say about where it came from.
+fn float Window.get_scroll_x(&self) => 0;
+fn bool Window.get_scroll_precise(&self) => false;
 fn String Window.get_text(&self) => "";
 fn bool Window.should_close(&self) => false;
 fn void Window.set_cursor(&self, CursorShape shape) { }

@@ -22,6 +22,7 @@ struct X11Window
 	uint wm_delete_window;  // WM_DELETE_WINDOW atom, watched in the event loop
 	bool close_requested;   // set once the window manager asks us to close
 	double scroll_delta;    // accumulated over the last poll (+ = up)
+	double scroll_delta_x;  // the horizontal half (+ = right)
 	DString text;           // text typed during the last poll
 	uint current_cursor;    // active X cursor resource (0 = none created yet)
 	XkbContext xkb_context; // libxkbcommon objects for layout-aware text input
@@ -399,6 +400,7 @@ fn void x11_pollEvents(X11Window* self, bool wait = false)
 	self.event_map.set(MOUSE_SCROLL_UP, false);
 	self.event_map.set(MOUSE_SCROLL_DOWN, false);
 	self.scroll_delta = 0;
+	self.scroll_delta_x = 0;
 	self.text.clear();
 
 	// Push any queued requests to the server before we (possibly) block.
@@ -475,7 +477,8 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 }
 
 // X11 button numbers: 1/2/3 = left/middle/right, 4/5 = vertical wheel up/down,
-// 8/9 = back/forward. Wheel "presses" carry no release we care about.
+// 6/7 = horizontal tilt/two-finger left/right, 8/9 = back/forward. Wheel
+// "presses" carry no release we care about.
 fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 {
 	switch (button)
@@ -495,6 +498,14 @@ fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 				self.scroll_delta -= 1.0;
 				self.event_map.set(MOUSE_SCROLL_DOWN, true);
 			}
+		// A core-protocol horizontal scroll arrives as a button too. There is no
+		// matching EventKey to latch, and there does not need to be — the delta
+		// is what a caller wants, and nothing has ever asked "is the pointer
+		// currently scrolled left".
+		case 6:
+			if (pressed) self.scroll_delta_x -= 1.0;
+		case 7:
+			if (pressed) self.scroll_delta_x += 1.0;
 		case 8: self.event_map.set(MOUSE_4, pressed);
 		case 9: self.event_map.set(MOUSE_5, pressed);
 		default:
@@ -503,6 +514,12 @@ fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 }
 
 fn float x11_get_scroll(X11Window* self) => (float)self.scroll_delta;
+fn float x11_get_scroll_x(X11Window* self) => (float)self.scroll_delta_x;
+
+// Core-protocol X11 scrolling is buttons, so every scroll is a detent by
+// construction — there is no pixel-precise path to report. A session running
+// XInput2 valuators would have one; this backend does not read them.
+fn bool x11_get_scroll_precise(X11Window* self) => false;
 fn String x11_get_text(X11Window* self) => self.text.str_view();
 fn bool x11_should_close(X11Window* self) => self.close_requested;
 

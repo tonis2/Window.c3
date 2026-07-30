@@ -300,6 +300,28 @@ fn float Window.get_scroll(&self)
 	}
 }
 
+// The horizontal half of the same call (+ = scroll right).
+fn float Window.get_scroll_x(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_get_scroll_x((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_get_scroll_x((X11Window*)self.src.backend_data);
+		default:      return 0;
+	}
+}
+
+// Whether that scroll came from a trackpad rather than a detented wheel.
+fn bool Window.get_scroll_precise(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_get_scroll_precise((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_get_scroll_precise((X11Window*)self.src.backend_data);
+		default:      return false;
+	}
+}
+
 // Text typed during the last getEvent call. Borrowed — valid until the next
 // getEvent. US-QWERTY only (see linux/main.c3).
 fn String Window.get_text(&self)

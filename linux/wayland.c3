@@ -60,6 +60,8 @@ struct WaylandWindow
 	float[<2>] mouse_pos;
 	bool close_requested; // set by the xdg_toplevel close event
 	double scroll_delta; // accumulated over the last poll (points, + = up)
+	double scroll_delta_x; // the horizontal half (points, + = right)
+	bool scroll_precise; // that scroll came from a finger, not a detented wheel
 	DString text; // UTF-8/ASCII typed during the last poll
 	Pointer pointer; // the seat pointer, needed to set the cursor shape
 	uint pointer_serial; // serial of the latest pointer enter (for set_shape)
@@ -491,15 +493,36 @@ fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint tim
 
 fn void pointerAxis(WaylandWindow* data, Pointer pointer, uint time, uint axis, int value)
 {
-	// axis 0 is vertical scroll; horizontal is ignored for now.
-	if (axis != 0 || value == 0) return;
+	if (value == 0) return;
 
-	// wl_pointer.axis: a positive value is a *downward* scroll. Negate so that a
-	// wheel-up gives a positive delta, matching X11 (button 4) and the darwin
-	// backend's convention where positive == scroll up.
-	double delta = -fixed_to_double(value);
-	data.scroll_delta += delta;
-	data.event_map.set(delta > 0 ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN, true);
+	double amount = fixed_to_double(value);
+
+	// axis 1 is horizontal, where wl_pointer's positive already means right —
+	// the same direction this backend reports — so it passes straight through.
+	if (axis == 1)
+	{
+		data.scroll_delta_x += amount;
+		return;
+	}
+
+	// Vertical does not pass through: there a positive value is a *downward*
+	// scroll, and it has to be negated so wheel-up comes out positive, matching
+	// X11 (button 4) and the darwin backend.
+	data.scroll_delta -= amount;
+	data.event_map.set(amount < 0 ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN, true);
+}
+
+<*
+ wl_pointer.axis_source, sent once per scroll frame ahead of the axis events it
+ describes: 0 wheel, 1 finger, 2 continuous, 3 wheel tilt.
+
+ Only used to answer "was this a trackpad" — see Window.get_scroll_precise. A
+ finger and a continuous device both report motion rather than detents; a wheel
+ and a wheel tilt both click.
+*>
+fn void pointerAxisSource(WaylandWindow* data, Pointer pointer, uint source)
+{
+	if (source == 1 || source == 2) data.scroll_precise = true;
 }
 
 
@@ -584,11 +607,11 @@ PointerListener pointerListener = {
 	&pointerMotion,
 	&pointerButton,
 	&pointerAxis,
-	&noop,
-	&noop,
-	&noop,
-	&noop,
-	&noop,
+	&noop,              // frame
+	&pointerAxisSource, // axis_source
+	&noop,              // axis_stop
+	&noop,              // axis_discrete
+	&noop,              // axis_value120
 	&noop
 };
 
@@ -788,6 +811,8 @@ fn float[<2>] wayland_getMousePos(WaylandWindow* self)
 }
 
 fn float wayland_get_scroll(WaylandWindow* self) => (float)self.scroll_delta;
+fn float wayland_get_scroll_x(WaylandWindow* self) => (float)self.scroll_delta_x;
+fn bool wayland_get_scroll_precise(WaylandWindow* self) => self.scroll_precise;
 fn String wayland_get_text(WaylandWindow* self) => self.text.str_view();
 fn bool wayland_should_close(WaylandWindow* self) => self.close_requested;
 fn float wayland_get_scale(WaylandWindow* self) => (float)self.buffer_scale;
@@ -918,6 +943,8 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 	self.event_map.set(MOUSE_SCROLL_UP, false);
 	self.event_map.set(MOUSE_SCROLL_DOWN, false);
 	self.scroll_delta = 0;
+	self.scroll_delta_x = 0;
+	self.scroll_precise = false;
 	self.text.clear();
 
 	// Non-blocking event dispatch

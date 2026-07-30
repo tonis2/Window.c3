@@ -14,6 +14,8 @@ struct DarwinWindow
 	CALayer layer;
 	EventMap event_map;
 	double scroll_delta;    // accumulated over the last getEvent call
+	double scroll_delta_x;  // the horizontal half, same accumulation
+	bool scroll_precise;    // that scroll came from a trackpad, not a wheel
 	DString text;           // UTF-8 typed during the last getEvent call
 }
 
@@ -148,6 +150,8 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 	self.src.event_map.set(MOUSE_SCROLL_UP, false);
 	self.src.event_map.set(MOUSE_SCROLL_DOWN, false);
 	self.src.scroll_delta = 0;
+	self.src.scroll_delta_x = 0;
+	self.src.scroll_precise = false;
 	self.src.text.clear();
 
 	// Drain everything queued since the last call — handling a single event
@@ -173,6 +177,12 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				{
 					double delta = event.get_scrolling_delta();
 					self.src.scroll_delta += delta;
+					self.src.scroll_delta_x += event.get_scrolling_delta_x();
+					// Sticky for the frame rather than per-event: a gesture is
+					// drained as several events and they all come from the same
+					// hand on the same device, so the question "was this a
+					// trackpad" has one answer per frame.
+					if (event.has_precise_scrolling_deltas()) self.src.scroll_precise = true;
 					if (delta > 0)
 					{
 						self.src.event_map.set(MOUSE_SCROLL_UP, true);
@@ -290,6 +300,13 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 // Accumulated scroll-wheel delta over the last getEvent call, in points
 // (positive = scroll up / away from the user).
 fn float Window.get_scroll(&self) => (float)self.src.scroll_delta;
+
+// The horizontal half, same call and same units (positive = scroll right).
+fn float Window.get_scroll_x(&self) => (float)self.src.scroll_delta_x;
+
+// Whether the last getEvent call's scroll came from a trackpad rather than a
+// wheel — see NSEvent.has_precise_scrolling_deltas. False when nothing scrolled.
+fn bool Window.get_scroll_precise(&self) => self.src.scroll_precise;
 
 // UTF-8 text typed during the last getEvent call. Borrowed — valid until the
 // next getEvent.
