@@ -261,6 +261,16 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 						self.src.event_map.set(event_value, false);
 					}
 				}
+			case FLAGS_CHANGED:
+
+				{
+					// The only place modifiers are reported on macOS — they
+					// never arrive as key up/down. Without this they stay
+					// permanently up and every chord (ctrl+Z, shift-drag) is
+					// dead while the plain keys still work, which is the
+					// confusing part.
+					apply_modifier_flags(&self.src.event_map, event.get_modifierFlags());
+				}
 			default:
 
 				{
@@ -358,10 +368,6 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstancePr
 	if (create_fn == null)
 	{
 		vk_lib = dlopen("libvulkan.1.dylib", RTLD_LAZY);
-		if (vk_lib == null)
-		{
-			vk_lib = dlopen("libMoltenVK.dylib", RTLD_LAZY);
-		}
 		if (vk_lib == null) return FAILED_OPENING_WINDOW~;
 
 		create_fn = (VkCreateSurfaceFn)dlsym(vk_lib, "vkCreateMetalSurfaceEXT");
@@ -421,6 +427,42 @@ enum DarwinEventType : uint (uint value)
 	PRESSURE            { 34 },
 	DIRECT_TOUCH        { 37 },
 	CHANGE_MODE         { 38 },
+}
+
+// Device-dependent modifier bits carried in an NSEvent's modifierFlags. The
+// documented masks (NSEventModifierFlagControl 0x40000 and friends) fold the
+// two sides of the keyboard together; these lower bits are what tells left
+// from right. Caps lock has no side and reports the latch, not the key.
+const int NX_LCTRL       = 0x0000_0001;
+const int NX_RCTRL       = 0x0000_2000;
+const int NX_LSHIFT      = 0x0000_0002;
+const int NX_RSHIFT      = 0x0000_0004;
+const int NX_LCMD        = 0x0000_0008;
+const int NX_RCMD        = 0x0000_0010;
+const int NX_LALT        = 0x0000_0020;
+const int NX_RALT        = 0x0000_0040;
+const int NX_ALPHA_SHIFT = 0x0001_0000;
+
+<*
+ Latch every modifier from one flagsChanged event.
+
+ A flagsChanged event carries no up/down of its own — only the new state of
+ the whole set — so all of them are rewritten each time rather than just the
+ key whose keycode changed. That costs nothing and resyncs the cases where an
+ edge was never delivered: a modifier pressed while another app had focus,
+ released while ours does, would otherwise stay latched down forever.
+*>
+fn void apply_modifier_flags(EventMap* map, int mods)
+{
+	map.set(LEFT_CTRL,   (mods & NX_LCTRL) != 0);
+	map.set(RIGHT_CTRL,  (mods & NX_RCTRL) != 0);
+	map.set(LEFT_SHIFT,  (mods & NX_LSHIFT) != 0);
+	map.set(RIGHT_SHIFT, (mods & NX_RSHIFT) != 0);
+	map.set(LEFT_SUPER,  (mods & NX_LCMD) != 0);
+	map.set(RIGHT_SUPER, (mods & NX_RCMD) != 0);
+	map.set(LEFT_ALT,    (mods & NX_LALT) != 0);
+	map.set(RIGHT_ALT,   (mods & NX_RALT) != 0);
+	map.set(CAPS_LOCK,   (mods & NX_ALPHA_SHIFT) != 0);
 }
 
 // Convert macOS keycode to unified EventKey
