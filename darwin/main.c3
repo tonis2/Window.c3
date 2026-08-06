@@ -568,12 +568,18 @@ fn EventKey darwinKeycodeToEventKey(int keycode)
 			return RETURN;
 		case 49:
 			return SPACE;
+		// The key labelled "delete" on a Mac keyboard is Backspace: it deletes
+		// backwards, and Apple's constant for it is kVK_Delete. The one that
+		// deletes forwards — fn+delete, or the dedicated key on a full-size
+		// keyboard — is kVK_ForwardDelete, and that is the one X11 and Win32 call
+		// Delete. Mapping them by name rather than by behaviour swaps them, which
+		// leaves a text field that will not erase the character just typed.
 		case 51:
-			return DELETE;
+			return BACKSPACE; // kVK_Delete
 		case 48:
 			return TAB;
 		case 117:
-			return BACKSPACE; // Forward delete
+			return DELETE; // kVK_ForwardDelete
 		case 57:
 			return CAPS_LOCK;
 			// Modifier keys
