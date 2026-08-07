@@ -120,6 +120,37 @@ fn float[<2>] Window.getMousePos(self)
 	return { (float)point.x, (float)point.y };
 }
 
+<*
+ Make a waiting `getEvent` return, from any thread.
+
+ The counterpart to `getEvent(wait: true)`: that call parks the main thread in
+ the kernel until an event arrives, which is what an on-demand loop wants and
+ also what leaves it deaf to anything that is not input. A worker thread with
+ work for the main thread — a socket server, a finished download — calls this,
+ and the loop runs one more iteration.
+
+ The event posted is application-defined and empty; `getEvent` falls through
+ its switch and dispatches it to NSApp like any other, which ignores it. So a
+ wake costs exactly one extra frame and changes nothing else.
+
+ Safe to call when nothing is waiting: the event sits in the queue and is
+ drained by the next call.
+*>
+fn void Window.wake(&self)
+{
+	// Made on whatever thread called this, so the autoreleased NSEvent needs a
+	// pool of its own — a worker thread has none, and without one the event
+	// leaks and AppKit logs about it.
+	NSAutoreleasePool pool = new_object("NSAutoreleasePool");
+	pool.alloc();
+	pool.init();
+	defer pool.release();
+
+	NSEvent event = new_wake_event();
+	if (!(void*)event) return;
+	self.src.app.postEvent(event, true);
+}
+
 fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	NSAutoreleasePool pool = new_object("NSAutoreleasePool");

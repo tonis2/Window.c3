@@ -36,6 +36,17 @@ fn float[<2>] Window.getMousePos(self)
 	return self.src.mouse_pos;
 }
 
+<*
+ Make a waiting `getEvent` return, from any thread.
+
+ Nothing to do here: the browser drives the frame and this backend never
+ blocks, so there is no parked thread to poke. Present so a caller can wake a
+ window without asking which platform it is on.
+*>
+fn void Window.wake(&self)
+{
+}
+
 fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	JsEvent event;

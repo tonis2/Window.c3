@@ -160,6 +160,25 @@ fn float[<2>] Window.getMousePos(self)
 	return { pos.x, self.height - pos.y };
 }
 
+<*
+ Make a waiting `getEvent` return, from any thread.
+
+ **Not implemented on either Linux backend yet — this returns without doing
+ anything**, so a worker thread with work for the main thread must wait for
+ the user to move the mouse. Callers that need the wake to be real should
+ treat Linux as "polling only" until this grows teeth.
+
+ What each backend needs: X11 blocks in `xcb_wait_for_event`, so the wake is
+ an `xcb_send_event` of a ClientMessage to the window's own id with an event
+ mask of zero — xcb is thread-safe for sending, and `x11_pollEvents` already
+ ignores message types it does not know. Wayland blocks in `poll` on the
+ display fd, so the wake is a byte down a pipe whose read end joins that poll
+ set, with `wl_display_cancel_read` on the wake-only path.
+*>
+fn void Window.wake(&self)
+{
+}
+
 // Get events. When wait is set (an on-demand render loop asking to idle), the
 // backend blocks on the first fetch until an event arrives, parking the thread
 // at ~0% CPU; otherwise it polls and returns immediately.

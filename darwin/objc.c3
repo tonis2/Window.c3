@@ -17,6 +17,13 @@ alias SendPtr = fn void*(void*, ObjcSelector, void*);
 alias SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
 alias SendSize = fn void*(void*, ObjcSelector, NSSize);
 alias SendString = fn void*(void*, ObjcSelector, ZString);
+alias SendPostEvent = fn void*(void*, ObjcSelector, NSEvent, bool);
+// +[NSEvent otherEventWithType:location:modifierFlags:timestamp:windowNumber:
+//  context:subtype:data1:data2:] — the one NSEvent constructor that takes no
+//  hardware state, and so the only one an application can make up out of thin
+//  air. NSPoint rides in the float registers as an HFA, the same way NSRect
+//  does in SendContentRec.
+alias SendOtherEvent = fn void*(void*, ObjcSelector, ulong, NSPoint, ulong, double, long, void*, short, long, long);
 alias GetInt = fn int(void*, ObjcSelector);
 alias GetDouble = fn double(void*, ObjcSelector);
 // Objective-C BOOL is a signed char, so only the low byte of the return
@@ -127,6 +134,46 @@ fn void NSApplication.updateWindows(&self)
 fn void NSApplication.sendEvent(&self, NSEvent event)
 {
 	objc::msg_send(self.id, SendEvent, "sendEvent:", event);
+}
+
+<*
+ Put an event at the head of the queue from any thread.
+
+ One of the few AppKit calls documented as thread-safe, and the reason
+ `Window.wake` can exist at all: it is what a worker thread has to reach for
+ when the main thread is parked in nextEventMatchingMask.
+
+ @param at_start : `True to jump the queue, so a wake is not stuck behind a burst of input.`
+*>
+fn void NSApplication.postEvent(&self, NSEvent event, bool at_start)
+{
+	objc::msg_send(self.id, SendPostEvent, "postEvent:atStart:", event, at_start);
+}
+
+<*
+ An application-defined event carrying nothing.
+
+ Autoreleased, so the caller needs a pool in place — which on a worker thread
+ means making one. Every field is zero: the event exists to be delivered, and
+ whatever reads the queue is expected to ignore it.
+*>
+fn NSEvent new_wake_event()
+{
+	NSObject cls = new_object("NSEvent");
+	return (NSEvent)objc::msg_send(
+		cls.cls,
+		SendOtherEvent,
+		"otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:",
+		(ulong)DarwinEventType.APPLICATION_DEFINED.value,
+		(NSPoint){ 0, 0 },
+		(ulong)0,
+		0.0,
+		(long)0,
+		null,
+		(short)0,
+		(long)0,
+		(long)0
+	);
 }
 
 fn void NSApplication.setActivationPolicy(&self, NSApplicationActivationPolicy policy)

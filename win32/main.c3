@@ -199,6 +199,18 @@ fn float[<2>] Window.getMousePos(&self)
 	return { (float)point.x, (float)point.y };
 }
 
+<*
+ Make a waiting `getEvent` return, from any thread.
+
+ Nothing to do here: this backend drains the queue with PeekMessage and never
+ blocks, `wait` or not, so the loop is already reachable from any thread — it
+ spins rather than parks. Present so a caller can wake a window without asking
+ which platform it is on.
+*>
+fn void Window.wake(&self)
+{
+}
+
 fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	Msg msg;
