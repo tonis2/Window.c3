@@ -30,10 +30,12 @@ fn bool on_close(ObjcId self)
 	return true;
 }
 
+// windowWillResize:toSize: — accept whatever size the drag proposes. Nothing is
+// recorded here: AppKit calls this many times a second for the whole of a live
+// resize, and the host reads the size it settled on off the surface instead.
 fn NSSize resize_window(ObjcId self, NSSize frame)
 {
 	if (catch self.get_ivar("NSWindow")) return frame;
-	io::printfn("window sresized to %f %f", frame.width, frame.height);
 	return frame;
 }
 
