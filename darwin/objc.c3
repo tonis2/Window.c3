@@ -1,4 +1,4 @@
-module c3w @if(env::DARWIN);
+module c3w @feat(DARWIN);
 import std::os::macos::objc;
 import std::os::macos::objc::ns;
 import std::io;

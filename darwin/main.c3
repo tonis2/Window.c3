@@ -1,4 +1,4 @@
-module c3w @if(env::DARWIN);
+module c3w @feat(DARWIN);
 import std::math;
 import std::io;
 import std::core::types;

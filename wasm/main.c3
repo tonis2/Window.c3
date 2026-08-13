@@ -1,4 +1,4 @@
-module c3w @if(env::WASM);
+module c3w @feat(WASM);
 
 // Event struct layout written by JS into WASM memory:
 // offset 0: uint type (1=key_down, 2=key_up, 3=mouse_down, 4=mouse_up, 5=scroll, 6=motion)

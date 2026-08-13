@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX);
+module c3w @feat(LINUX);
 import std::math;
 
 import std::io;
