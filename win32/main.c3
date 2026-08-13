@@ -1,4 +1,4 @@
-module c3w @if(env::WIN32);
+module c3w @feat(WIN32);
 import std::math;
 import std::os::win32;
 import std::io;

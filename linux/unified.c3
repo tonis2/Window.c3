@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX) @link("dl");
+module c3w @feat(LINUX) @link("dl");
 import std::io;
 
 extern fn char* getenv(char* name) @cname("getenv");
@@ -34,14 +34,14 @@ struct LinuxWindow
 fn BackendType detect_backend()
 {
 	// Feature flags to force a specific backend
-	$if $feature(X11):
+	$if $feat(X11):
 		if (x11_available())
 		{
 			io::printfn("Using X11 display server (forced by feature)");
 			return BackendType.X11;
 		}
 	$else
-		$if $feature(WAYLAND):
+		$if $feat(WAYLAND):
 			if (wayland_available())
 			{
 				io::printfn("Using Wayland display server (forced by feature)");

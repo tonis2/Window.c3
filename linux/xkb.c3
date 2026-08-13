@@ -1,4 +1,4 @@
-module c3w @if(env::LINUX);
+module c3w @feat(LINUX);
 
 // libxkbcommon bindings, loaded via dlopen (libxkbcommon.so.0 and, for X11,
 // libxkbcommon-x11.so.0 — the runtime SONAMEs, present on any desktop; no -dev

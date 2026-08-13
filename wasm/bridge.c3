@@ -1,4 +1,4 @@
-module c3w @if(env::WASM);
+module c3w @feat(WASM);
 
 const char[] BRIDGE_JS = $embed( "c3w.js" );
 
