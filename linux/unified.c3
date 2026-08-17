@@ -390,3 +390,40 @@ fn void Window.set_cursor(&self, CursorShape shape)
 		default:      break;
 	}
 }
+
+<*
+ Resize the window.
+
+ The two backends mean quite different things by it. X11 configures the window
+ directly and the window manager may adjust the request. Wayland cannot ask at
+ all — it constrains its own geometry and the compositor answers with a
+ configure. Either way the size that arrives back is the one that counts, so
+ nothing is recorded here.
+*>
+fn void Window.set_size(&self, int width, int height)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_size((WaylandWindow*)self.src.backend_data, width, height);
+		case X11:     x11_set_size((X11Window*)self.src.backend_data, width, height);
+		default:      break;
+	}
+}
+
+<*
+ Minimise the window, or restore it.
+
+ **Restoring works on X11 and not on Wayland.** xdg-shell has a `set_minimized`
+ request and no counterpart, deliberately — a client that could un-minimise
+ itself could jump in front of whatever the user was doing. On Wayland
+ `minimized = false` is a no-op.
+*>
+fn void Window.set_minimized(&self, bool minimized)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_minimized((WaylandWindow*)self.src.backend_data, minimized);
+		case X11:     x11_set_minimized((X11Window*)self.src.backend_data, minimized);
+		default:      break;
+	}
+}

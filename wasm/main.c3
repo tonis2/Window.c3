@@ -21,6 +21,7 @@ struct WasmWindow
 
 // JS imports (provided by c3w.js bridge via env object)
 extern fn void js_init_canvas(int width, int height) @cname("js_init_canvas");
+extern fn void js_set_canvas_size(int width, int height) @cname("js_set_canvas_size");
 extern fn void js_destroy_canvas() @cname("js_destroy_canvas");
 extern fn int js_poll_event(JsEvent* event) @cname("js_poll_event");
 
@@ -241,6 +242,28 @@ fn EventKey jsMouseToEventKey(uint button)
 }
 
 // --- API parity with the darwin backend (real implementations TODO) ---
+<*
+ Resize the canvas, in CSS pixels.
+
+ The canvas *is* the window here, so this is the whole of what a resize means:
+ a page has no frame, no chrome and no window manager to negotiate with.
+*>
+fn void Window.set_size(&self, int width, int height)
+{
+	js_set_canvas_size(width, height);
+	self.width = (float)width;
+	self.height = (float)height;
+}
+
+<*
+ A no-op, and it cannot be anything else: a page cannot minimise the browser it
+ is running in, and nothing in the DOM corresponds to an iconified window.
+ Present so that code written against `c3w` still compiles for wasm.
+*>
+fn void Window.set_minimized(&self, bool minimized)
+{
+}
+
 fn float Window.get_scroll(&self) => 0;
 
 // Both unimplemented alongside get_scroll: the JS bridge does not forward wheel

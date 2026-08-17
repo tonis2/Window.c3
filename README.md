@@ -87,6 +87,42 @@ Returns the current mouse position relative to the window.
 fn float[<2>] Window.getMousePos(self)
 ```
 
+### `Window.set_size`
+
+Resizes the window, in the same units `c3w::new` took — the drawable/content
+size, not the outer frame, so macOS and Win32 add their chrome back for you.
+
+```c3
+fn void Window.set_size(&self, int width, int height)
+```
+
+The size that arrives is a request, not a result, and nothing is recorded on the
+`Window`. Read the size back the way you already do — off the surface, or from
+the resize event — because every platform is entitled to answer with a different
+one:
+
+| Platform | What happens |
+|---|---|
+| macOS | `setFrame:display:`, keeping the top edge in place |
+| Win32 | `SetWindowPos`, client size converted to window size |
+| X11 | `xcb_configure_window`; the window manager may adjust it |
+| Wayland | `set_max_size` + `set_min_size`, then the compositor answers with a configure |
+| wasm | the canvas is resized directly |
+
+### `Window.set_minimized`
+
+Minimizes the window, or restores it.
+
+```c3
+fn void Window.set_minimized(&self, bool minimized)
+```
+
+**Restoring does not work on Wayland**, and that is the protocol rather than an
+omission: xdg-shell has `xdg_toplevel.set_minimized` and no counterpart, because
+a client that could un-minimize itself could jump in front of whatever the user
+was doing. Passing `false` there is a no-op. It is also a no-op on wasm, where a
+page cannot minimize the browser running it.
+
 ### `Window.free`
 
 Releases window resources. Call when done with the window.
