@@ -902,6 +902,51 @@ fn uint wayland_cursor_shape_value(CursorShape shape)
 	}
 }
 
+<*
+ Resize the window, in logical points.
+
+ Wayland has no "set my size" request — the compositor owns window geometry and
+ a client asks for a size by constraining it. `wayland_new` pins the window by
+ setting `set_max_size` and `set_min_size` to the same value, so re-issuing that
+ pair is how the size changes, and the compositor answers with an
+ xdg_toplevel.configure at the size it settled on.
+
+ The shm buffer created at startup is not touched, and does not need to be: it
+ is a placeholder that exists so the window is visible before the client has
+ drawn anything. Once a Vulkan (or GL) surface is attached, content comes from
+ the client's own swapchain, which rebuilds on the configure.
+*>
+fn void wayland_set_size(WaylandWindow* self, int width, int height)
+{
+	if (self.top_level == null || proxy_marshal_flags == null) return;
+	if (width <= 0 || height <= 0) return;
+
+	// set_max_size (opcode 7) and set_min_size (opcode 8) — the same pair
+	// wayland_new uses to fix the window's geometry.
+	proxy_marshal_flags(self.top_level, 7, null, proxy_get_version(self.top_level), 0, width, height);
+	proxy_marshal_flags(self.top_level, 8, null, proxy_get_version(self.top_level), 0, width, height);
+	surface_commit(self.surface);
+}
+
+<*
+ Minimise the window.
+
+ **One direction only, and that is the protocol, not an omission.** xdg-shell
+ has `xdg_toplevel.set_minimized` and no counterpart: a minimised window comes
+ back when the user asks for it, and a client that could un-minimise itself
+ could pop itself in front of whatever the user was doing. `minimized = false`
+ is therefore a no-op here, unlike on macOS and Win32.
+*>
+fn void wayland_set_minimized(WaylandWindow* self, bool minimized)
+{
+	if (!minimized) return;
+	if (self.top_level == null || proxy_marshal_flags == null) return;
+
+	// xdg_toplevel.set_minimized → opcode 13, no arguments.
+	proxy_marshal_flags(self.top_level, 13, null, proxy_get_version(self.top_level), 0);
+	surface_commit(self.surface);
+}
+
 fn void wayland_set_cursor(WaylandWindow* self, CursorShape shape)
 {
 	// No-op when the compositor lacks cursor-shape-v1 or the pointer has never

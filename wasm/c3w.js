@@ -84,6 +84,11 @@ export function createC3WBridge(canvas) {
             installListeners(canvas);
         },
 
+        js_set_canvas_size(width, height) {
+            canvas.width = width;
+            canvas.height = height;
+        },
+
         js_destroy_canvas() {
             removeListeners();
         },

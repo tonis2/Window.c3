@@ -46,6 +46,13 @@ alias FnXcbFlush = fn XCB_Window(Connection);
 alias FnXcbPollForEvent = fn KeyPressEvent*(Connection);
 alias FnXcbWaitForEvent = fn KeyPressEvent*(Connection);
 alias FnXcbChangeProperty = fn void(Connection, XcbProp, XCB_Window, uint, uint, uint, uint, char*);
+// xcb_configure_window(c, window, value_mask, value_list). The cookie it
+// returns is a one-field struct, which the ABI passes back as a plain uint.
+alias FnXcbConfigureWindow = fn uint(Connection, XCB_Window, ushort, void*);
+// Xlib rather than xcb: iconifying properly means an ICCCM WM_CHANGE_STATE
+// client message sent to the root window, and XIconifyWindow is that, already
+// written. The display is open either way — xcb_connect rides on it.
+alias FnXIconifyWindow = fn int(X11Display, ulong window, int screen);
 alias FnXcbQueryPointer = fn uint(Connection, XCB_Window);
 alias FnXcbQueryPointerReply = fn KeyPressEvent*(Connection, uint, void*);
 alias FnXcbDestroyWindow = fn uint(Connection, XCB_Window);
@@ -125,6 +132,8 @@ FnXcbPollForEvent xcbPollEvent;
 FnXcbPollForEvent xcbPollQueuedEvent;
 FnXcbWaitForEvent xcbWaitForEvent;
 FnXcbChangeProperty xcbChangeProperty;
+FnXcbConfigureWindow xcbConfigureWindow;
+FnXIconifyWindow xIconifyWindow;
 FnXcbQueryPointer xcbQueryPointer;
 FnXcbQueryPointerReply xcbQueryPointerReply;
 FnXcbDestroyWindow xcbDestroy;
@@ -168,6 +177,8 @@ fn bool x11_load()
 	xcbPollQueuedEvent = (FnXcbPollForEvent)dlsym(_xcb_lib, "xcb_poll_for_queued_event");
 	xcbWaitForEvent = (FnXcbWaitForEvent)dlsym(_xcb_lib, "xcb_wait_for_event");
 	xcbChangeProperty = (FnXcbChangeProperty)dlsym(_xcb_lib, "xcb_change_property");
+	xcbConfigureWindow = (FnXcbConfigureWindow)dlsym(_xcb_lib, "xcb_configure_window");
+	xIconifyWindow = (FnXIconifyWindow)dlsym(_x11_lib, "XIconifyWindow");
 	xcbQueryPointer = (FnXcbQueryPointer)dlsym(_xcb_lib, "xcb_query_pointer");
 	xcbQueryPointerReply = (FnXcbQueryPointerReply)dlsym(_xcb_lib, "xcb_query_pointer_reply");
 	xcbDestroy = (FnXcbDestroyWindow)dlsym(_xcb_lib, "xcb_destroy_window");
@@ -543,6 +554,60 @@ fn uint x11_cursor_font(CursorShape shape)
 		case RESIZE_V:      return 116; // XC_sb_v_double_arrow
 		default:            return 68;
 	}
+}
+
+// xcb_config_window_t: WIDTH is bit 2, HEIGHT bit 3.
+const ushort XCB_CONFIG_WINDOW_WIDTH  = 1 << 2;
+const ushort XCB_CONFIG_WINDOW_HEIGHT = 1 << 3;
+
+<*
+ Resize the window, in pixels.
+
+ X11 has no window chrome in the client's rectangle — the frame the window
+ manager draws is a separate parent window — so unlike macOS and Win32 there is
+ nothing to add back, and this size is the drawable size directly.
+
+ The window manager is free to refuse or adjust it; the ConfigureNotify that
+ follows is what actually settled, which is why nothing is recorded here.
+*>
+fn void x11_set_size(X11Window* self, int width, int height)
+{
+	if (self.connection == null || xcbConfigureWindow == null) return;
+	if (width <= 0 || height <= 0) return;
+
+	uint[2] values = { (uint)width, (uint)height };
+	xcbConfigureWindow(
+		self.connection,
+		self.window,
+		XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+		&values
+	);
+	xcbFlush(self.connection);
+}
+
+<*
+ Minimise the window, or restore it.
+
+ Restoring is a plain map: an iconified window is unmapped, so mapping it again
+ is what brings it back, and that is the same call `new` uses to show it in the
+ first place.
+*>
+fn void x11_set_minimized(X11Window* self, bool minimized)
+{
+	if (self.connection == null) return;
+
+	if (minimized)
+	{
+		if (self.display == null || xIconifyWindow == null) return;
+		// Screen 0: c3w opens the default display and takes its first screen.
+		xIconifyWindow(self.display, (ulong)(uptr)self.window, 0);
+		if (xFlush != null) xFlush(self.display);
+		return;
+	}
+
+	if (xcbMapWindow == null) return;
+	xcbMapWindow(self.connection, self.window);
+	xcbFlush(self.connection);
 }
 
 fn void x11_set_cursor(X11Window* self, CursorShape shape)

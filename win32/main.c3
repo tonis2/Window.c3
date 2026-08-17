@@ -30,8 +30,15 @@ const uint CS_VREDRAW = 0x0001;
 const uint CS_OWNDC   = 0x0020;
 
 // ShowWindow commands
-const int SW_SHOW = 5;
-const int SW_HIDE = 0;
+const int SW_SHOW     = 5;
+const int SW_HIDE     = 0;
+const int SW_MINIMIZE = 6;
+const int SW_RESTORE  = 9;
+
+// SetWindowPos flags
+const uint SWP_NOMOVE     = 0x0002;
+const uint SWP_NOZORDER   = 0x0004;
+const uint SWP_NOACTIVATE = 0x0010;
 
 // Default window icons/cursors
 const uptr IDI_APPLICATION = 32512;
@@ -53,6 +60,7 @@ alias WParam = win32::Win32_WPARAM;
 alias LParam = win32::Win32_LPARAM;
 alias Atom = win32::Win32_ATOM;
 alias Point = win32::Win32_POINT;
+alias Rect = win32::Win32_RECT;
 alias Msg = win32::Win32_MSG;
 alias WndClassExW = win32::Win32_WNDCLASSEXW;
 alias Char16 = win32::Win32_WCHAR;
@@ -85,6 +93,14 @@ extern fn HDc getDC(HWnd hwnd) @cname("GetDC");
 
 
 extern fn HInstance getModuleHandleW(Char16* name) @cname("GetModuleHandleW");
+
+extern fn bool setWindowPos(HWnd hwnd, HWnd insertAfter, int x, int y, int cx, int cy, uint flags) @cname("SetWindowPos");
+
+extern fn bool showWindow(HWnd hwnd, int cmdShow) @cname("ShowWindow");
+
+extern fn bool getWindowRect(HWnd hwnd, Rect* rect) @cname("GetWindowRect");
+
+extern fn bool getClientRect(HWnd hwnd, Rect* rect) @cname("GetClientRect");
 
 
 struct Win32Window
@@ -591,6 +607,47 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstancePr
 }
 
 // --- API parity with the darwin backend (real implementations TODO) ---
+<*
+ Resize the window, in the same logical points `new` took.
+
+ Those are a *client* size, and `SetWindowPos` takes a whole-window size, so
+ the chrome is measured as the difference between the two rects and added back.
+ Deriving it that way rather than from `AdjustWindowRect` means the window's
+ actual style — menu bar, borders, whatever a later change adds — is accounted
+ for without this having to know about it.
+*>
+fn void Window.set_size(&self, int width, int height)
+{
+	if (self.src.hwnd == null) return;
+
+	Rect frame;
+	Rect client;
+	if (!getWindowRect(self.src.hwnd, &frame)) return;
+	if (!getClientRect(self.src.hwnd, &client)) return;
+
+	int chrome_width  = (frame.right - frame.left) - (client.right - client.left);
+	int chrome_height = (frame.bottom - frame.top) - (client.bottom - client.top);
+
+	setWindowPos(
+		self.src.hwnd,
+		(HWnd)null,
+		0,
+		0,
+		width + chrome_width,
+		height + chrome_height,
+		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+	);
+}
+
+<*
+ Minimise the window to the taskbar, or restore it.
+*>
+fn void Window.set_minimized(&self, bool minimized)
+{
+	if (self.src.hwnd == null) return;
+	showWindow(self.src.hwnd, minimized ? SW_MINIMIZE : SW_RESTORE);
+}
+
 fn float Window.get_scroll(&self) => 0;
 
 // Both unimplemented alongside get_scroll: this backend does not read

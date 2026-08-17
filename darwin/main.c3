@@ -372,6 +372,58 @@ fn void Window.set_cursor(&self, CursorShape shape)
 	if (cursor) objc::msg_send(cursor, SendVoid, "set");
 }
 
+<*
+ Resize the window, in the same logical points `new` took.
+
+ `new` builds the window with `initWithContentRect:`, so its `params` are the
+ *content* size and this has to mean the same thing or the two disagree by the
+ height of a title bar. AppKit's `setFrame:` sets the whole frame, so the chrome
+ is measured off the content view and added back.
+
+ The origin moves with the size because AppKit's frame origin is the *bottom*
+ left: growing a window by changing only its size walks the title bar up off the
+ screen. Adjusting it keeps the top edge where it was, which is what a user
+ dragging the bottom-right corner sees.
+
+ The window's own `width`/`height` fields are deliberately not updated — see
+ `getEvent`'s note. Read the size back off the surface, which is the only thing
+ that knows what the window server actually settled on.
+*>
+fn void Window.set_size(&self, int width, int height)
+{
+	NSRect frame   = objc::msg_send(self.src.window.id, GetRect, "frame");
+	NSRect content = objc::msg_send(self.src.view.id, GetRect, "frame");
+
+	double chrome_width  = frame.size.width - content.size.width;
+	double chrome_height = frame.size.height - content.size.height;
+
+	double new_height = (double)height + chrome_height;
+	frame.origin.y += frame.size.height - new_height;
+	frame.size = { (double)width + chrome_width, new_height };
+
+	objc::msg_send(self.src.window.id, SendRectBool, "setFrame:display:", frame, true);
+}
+
+<*
+ Minimise the window to the Dock, or restore it.
+
+ Both directions work here, unlike Wayland, where xdg-shell has a
+ `set_minimized` request and no way to ask for the window back.
+*>
+fn void Window.set_minimized(&self, bool minimized)
+{
+	// The selector is a compile-time parameter of msg_send, so the two
+	// directions are two call sites rather than one call with a chosen name.
+	if (minimized)
+	{
+		objc::msg_send(self.src.window.id, SendPtr, "miniaturize:", null);
+	}
+	else
+	{
+		objc::msg_send(self.src.window.id, SendPtr, "deminiaturize:", null);
+	}
+}
+
 fn void Window.free(&self)
 {
 	self.src.text.free();

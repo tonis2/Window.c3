@@ -16,6 +16,9 @@ alias SendInt = fn void*(void*, ObjcSelector, int);
 alias SendPtr = fn void*(void*, ObjcSelector, void*);
 alias SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
 alias SendSize = fn void*(void*, ObjcSelector, NSSize);
+// -[NSWindow setFrame:display:]. NSRect rides in the float registers as an HFA,
+// the same way it does in SendContentRec.
+alias SendRectBool = fn void*(void*, ObjcSelector, NSRect, bool);
 alias SendString = fn void*(void*, ObjcSelector, ZString);
 alias SendPostEvent = fn void*(void*, ObjcSelector, NSEvent, bool);
 // +[NSEvent otherEventWithType:location:modifierFlags:timestamp:windowNumber:
