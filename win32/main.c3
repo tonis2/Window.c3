@@ -19,6 +19,13 @@ const uint WM_RBUTTONUP   = 0x0205;
 const uint WM_MBUTTONDOWN = 0x0207;
 const uint WM_MBUTTONUP   = 0x0208;
 const uint WM_MOUSEWHEEL  = 0x020A;
+const uint WM_MOUSEHWHEEL = 0x020E;
+const uint WM_CHAR        = 0x0102;
+
+// One notch of a detented wheel. Windows reports rotation in multiples of this
+// so that a free-spinning wheel can send fractions of a notch; dividing by it
+// puts the answer in the same units the X11 backend reports, which is notches.
+const float WHEEL_DELTA = 120.0;
 
 // PeekMessage flags
 const uint PM_REMOVE   = 0x0001;
@@ -102,6 +109,12 @@ extern fn bool getWindowRect(HWnd hwnd, Rect* rect) @cname("GetWindowRect");
 
 extern fn bool getClientRect(HWnd hwnd, Rect* rect) @cname("GetClientRect");
 
+// Windows 10 1607 and later. Answers in dots per inch for the display this
+// window is on — 96 being 1:1 — and answers 96 whatever the display is doing
+// when the process has not declared itself DPI-aware, which is a manifest the
+// application supplies and not something a library can decide for it.
+extern fn uint getDpiForWindow(HWnd hwnd) @cname("GetDpiForWindow");
+
 
 struct Win32Window
 {
@@ -109,7 +122,14 @@ struct Win32Window
 	HInstance instance;
 	HDc hdc;
 	EventMap event_map;
+	EventLog event_log;     // the transitions behind the map, same call
 	float[<2>] mouse_pos;
+	double scroll_delta;    // accumulated over the last getEvent call (+ = away)
+	double scroll_delta_x;  // the horizontal half (+ = right)
+	DString text;           // UTF-8 typed during the last getEvent call
+	// A WM_CHAR carries one UTF-16 code unit, so anything past the basic plane
+	// arrives as two messages. The first is held here until the second comes.
+	Char16 pending_surrogate;
 }
 
 // Window procedure callback
@@ -201,7 +221,7 @@ fn Window? new(Params params, String name)
 	win32::updateWindow(hwnd);
 
 	return {
-		.src = { .hwnd = hwnd, .instance = instance, .hdc = hdc, },
+		.src = { .hwnd = hwnd, .instance = instance, .hdc = hdc, .text = dstring::new(mem) },
 		.width = params.width,
 		.height = params.height,
 	};
@@ -231,9 +251,14 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	Msg msg;
 
-	// Reset scroll state each frame
+	// Per-frame state: scroll, typed text and the transition log accumulate over
+	// this call only; the latched key/button map persists across frames.
 	self.src.event_map.set(MOUSE_SCROLL_UP, false);
 	self.src.event_map.set(MOUSE_SCROLL_DOWN, false);
+	self.src.scroll_delta = 0;
+	self.src.scroll_delta_x = 0;
+	self.src.text.clear();
+	self.src.event_log.clear();
 
 	while (peekMessageW(&msg, null, 0, 0, PM_REMOVE) != 0)
 	{
@@ -249,27 +274,42 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, true);
+					self.src.event_log.push_key(key, true);
 				}
 			case WM_KEYUP:
 				EventKey key = win32VkToEventKey((uint)msg.wParam);
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, false);
+					self.src.event_log.push_key(key, false);
 				}
+			case WM_CHAR:
+				// Posted by TranslateMessage above, so it arrives on a later
+				// turn of this same loop. It carries the layout, the dead keys
+				// and the shift state already applied, which is the whole reason
+				// to read it rather than translating the key map by hand.
+				self.append_typed((Char16)(msg.wParam & 0xFFFF));
 			case WM_LBUTTONDOWN:
 				self.src.event_map.set(LEFT_MOUSE, true);
+				self.src.event_log.push_button(LEFT_MOUSE, true);
 			case WM_LBUTTONUP:
 				self.src.event_map.set(LEFT_MOUSE, false);
+				self.src.event_log.push_button(LEFT_MOUSE, false);
 			case WM_RBUTTONDOWN:
 				self.src.event_map.set(RIGHT_MOUSE, true);
+				self.src.event_log.push_button(RIGHT_MOUSE, true);
 			case WM_RBUTTONUP:
 				self.src.event_map.set(RIGHT_MOUSE, false);
+				self.src.event_log.push_button(RIGHT_MOUSE, false);
 			case WM_MBUTTONDOWN:
 				self.src.event_map.set(MIDDLE_MOUSE, true);
+				self.src.event_log.push_button(MIDDLE_MOUSE, true);
 			case WM_MBUTTONUP:
 				self.src.event_map.set(MIDDLE_MOUSE, false);
+				self.src.event_log.push_button(MIDDLE_MOUSE, false);
 			case WM_MOUSEWHEEL:
 				short delta = (short)((msg.wParam >> 16) & 0xFFFF);
+				self.src.scroll_delta += (double)delta / WHEEL_DELTA;
 				if (delta > 0)
 				{
 					self.src.event_map.set(MOUSE_SCROLL_UP, true);
@@ -278,6 +318,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				{
 					self.src.event_map.set(MOUSE_SCROLL_DOWN, true);
 				}
+			case WM_MOUSEHWHEEL:
+				// Positive is a tilt to the right, which is the direction the
+				// other backends call positive too.
+				short h_delta = (short)((msg.wParam >> 16) & 0xFFFF);
+				self.src.scroll_delta_x += (double)h_delta / WHEEL_DELTA;
 			case WM_MOUSEMOVE:
 				self.src.mouse_pos = { (float)(msg.lParam & 0xFFFF), (float)((msg.lParam >> 16) & 0xFFFF) };
 			default:
@@ -289,6 +334,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 
 fn void Window.free(&self)
 {
+	self.src.text.free();
 	if (self.src.hdc != null)
 	{
 		releaseDC(self.src.hwnd, self.src.hdc);
@@ -648,14 +694,87 @@ fn void Window.set_minimized(&self, bool minimized)
 	showWindow(self.src.hwnd, minimized ? SW_MINIMIZE : SW_RESTORE);
 }
 
-fn float Window.get_scroll(&self) => 0;
+// Accumulated wheel rotation over the last getEvent call, in notches
+// (positive = away from the user), matching the X11 backend's units.
+fn float Window.get_scroll(&self) => (float)self.src.scroll_delta;
 
-// Both unimplemented alongside get_scroll: this backend does not read
-// WM_MOUSEWHEEL or WM_MOUSEHWHEEL yet, so there is no delta to report and
-// nothing to say about where it came from.
-fn float Window.get_scroll_x(&self) => 0;
+// The horizontal half, same call and same units (positive = tilt right).
+fn float Window.get_scroll_x(&self) => (float)self.src.scroll_delta_x;
+
+<*
+ Always false here, and that is the truth rather than a stub.
+
+ The flag means "this came from a trackpad, in continuous units" — which on
+ macOS is `hasPreciseScrollingDeltas`. The classic WM_MOUSEWHEEL path reports
+ notches whatever the hardware is; a precision touchpad reports through the
+ Pointer Input Stack instead, which this backend does not read.
+*>
 fn bool Window.get_scroll_precise(&self) => false;
-fn String Window.get_text(&self) => "";
+
+// Text typed during the last getEvent call, as UTF-8. Borrowed — valid until
+// the next one.
+fn String Window.get_text(&self) => self.src.text.str_view();
+
 fn bool Window.should_close(&self) => false;
 fn void Window.set_cursor(&self, CursorShape shape) { }
-fn float Window.get_scale(&self) => 1.0;
+
+<*
+ Framebuffer pixels per logical window unit.
+
+ **1.0 unless the process has declared itself DPI-aware**, and that declaration
+ is the application's manifest rather than anything a window library may do on
+ its behalf: turning it on changes what every coordinate in the process means,
+ including the size this window was asked for. `GetDpiForWindow` answers 96 for
+ an unaware process by design, so this answers 1.0 and everything downstream
+ stays consistent — which is the same answer the old stub gave, now for a
+ reason rather than for want of an implementation.
+*>
+fn float Window.get_scale(&self)
+{
+	if (self.src.hwnd == null) return 1.0;
+	uint dpi = getDpiForWindow(self.src.hwnd);
+	if (dpi == 0) return 1.0;
+	return (float)dpi / 96.0f;
+}
+
+<*
+ The key and button transitions the last `getEvent` drained, in order.
+
+ See `EventLog`. The map this sits beside is a latch and cannot describe a press
+ that began and ended between two calls; this can.
+*>
+fn Event[] Window.events(&self) => self.src.event_log.view();
+
+<*
+ One UTF-16 code unit from a WM_CHAR, as UTF-8.
+
+ Surrogate pairs are the whole reason this is a function. A character past the
+ basic plane arrives as two messages — a high unit then a low one — and
+ appending each on its own writes two replacement characters where one emoji was
+ meant. Control characters are dropped here for the same reason the other
+ backends drop them: `get_text` is what a text field wants, and a text field
+ does not want a backspace in the middle of its string.
+*>
+fn void Window.append_typed(&self, Char16 unit)
+{
+	if (unit >= 0xD800 && unit <= 0xDBFF)
+	{
+		self.src.pending_surrogate = unit;
+		return;
+	}
+
+	Char32 c = unit;
+	if (unit >= 0xDC00 && unit <= 0xDFFF)
+	{
+		// A low surrogate with nothing before it is a broken pair; dropping it
+		// is better than emitting an unpaired one.
+		if (self.src.pending_surrogate == 0) return;
+		c = 0x10000
+			+ (((Char32)self.src.pending_surrogate - 0xD800) << 10)
+			+ ((Char32)unit - 0xDC00);
+	}
+	self.src.pending_surrogate = 0;
+
+	if (c < 0x20 || c == 0x7F) return;
+	self.src.text.append_char32(c);
+}

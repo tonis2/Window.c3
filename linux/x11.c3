@@ -16,6 +16,7 @@ struct X11Window
 	Connection connection;
 	XCB_Window window;
 	EventMap event_map;
+	EventLog event_log;     // the transitions behind the map, same poll
 	uint display_width;
 	uint display_height;
 	bool initialized;
@@ -413,6 +414,7 @@ fn void x11_pollEvents(X11Window* self, bool wait = false)
 	self.scroll_delta = 0;
 	self.scroll_delta_x = 0;
 	self.text.clear();
+	self.event_log.clear();
 
 	// Push any queued requests to the server before we (possibly) block.
 	xcbFlush(self.connection);
@@ -446,7 +448,11 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 			{
 				uint keycode = (uint)event.value;
 				EventKey key = linuxScancodeToEventKey(keycode);
-				if (key != EMPTY_KEY) self.event_map.set(key, true);
+				if (key != EMPTY_KEY)
+				{
+					self.event_map.set(key, true);
+					self.event_log.push_key(key, true);
+				}
 
 				// Decode typed text: prefer the layout-aware xkb path (keeping its
 				// modifier state in sync via update_key), else the US-QWERTY table
@@ -467,7 +473,11 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 			{
 				uint keycode = (uint)event.value;
 				EventKey key = linuxScancodeToEventKey(keycode);
-				if (key != EMPTY_KEY) self.event_map.set(key, false);
+				if (key != EMPTY_KEY)
+				{
+					self.event_map.set(key, false);
+					self.event_log.push_key(key, false);
+				}
 				if (self.xkb_state != null) xkb_state_update_key(self.xkb_state, keycode, XKB_KEY_UP);
 			}
 		case 4: // ButtonPress
@@ -494,9 +504,9 @@ fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 {
 	switch (button)
 	{
-		case 1: self.event_map.set(LEFT_MOUSE, pressed);
-		case 2: self.event_map.set(MIDDLE_MOUSE, pressed);
-		case 3: self.event_map.set(RIGHT_MOUSE, pressed);
+		case 1: self.event_map.set(LEFT_MOUSE, pressed);   self.event_log.push_button(LEFT_MOUSE, pressed);
+		case 2: self.event_map.set(MIDDLE_MOUSE, pressed); self.event_log.push_button(MIDDLE_MOUSE, pressed);
+		case 3: self.event_map.set(RIGHT_MOUSE, pressed);  self.event_log.push_button(RIGHT_MOUSE, pressed);
 		case 4:
 			if (pressed)
 			{
@@ -517,8 +527,8 @@ fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 			if (pressed) self.scroll_delta_x -= 1.0;
 		case 7:
 			if (pressed) self.scroll_delta_x += 1.0;
-		case 8: self.event_map.set(MOUSE_4, pressed);
-		case 9: self.event_map.set(MOUSE_5, pressed);
+		case 8: self.event_map.set(MOUSE_4, pressed); self.event_log.push_button(MOUSE_4, pressed);
+		case 9: self.event_map.set(MOUSE_5, pressed); self.event_log.push_button(MOUSE_5, pressed);
 		default:
 			break;
 	}

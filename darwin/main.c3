@@ -13,6 +13,7 @@ struct DarwinWindow
 	NSView view;
 	CALayer layer;
 	EventMap event_map;
+	EventLog event_log;     // the transitions behind the map, same call
 	double scroll_delta;    // accumulated over the last getEvent call
 	double scroll_delta_x;  // the horizontal half, same accumulation
 	bool scroll_precise;    // that scroll came from a trackpad, not a wheel
@@ -186,6 +187,10 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 	self.src.scroll_delta_x = 0;
 	self.src.scroll_precise = false;
 	self.src.text.clear();
+	// The log is per-frame for the same reason the text is: it is a record of
+	// what happened *during this call*, and a caller that kept it would be
+	// reading edges it has already been told about.
+	self.src.event_log.clear();
 
 	// Drain everything queued since the last call — handling a single event
 	// per frame loses press/release edges and lags typing.
@@ -230,36 +235,42 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 
 				{
 					self.src.event_map.set(LEFT_MOUSE, false);
+					self.src.event_log.push_button(LEFT_MOUSE, false);
 					break;
 				}
 			case RIGHT_MOUSE_UP:
 
 				{
 					self.src.event_map.set(RIGHT_MOUSE, false);
+					self.src.event_log.push_button(RIGHT_MOUSE, false);
 					break;
 				}
 			case LEFT_MOUSE_DOWN:
 
 				{
 					self.src.event_map.set(LEFT_MOUSE, true);
+					self.src.event_log.push_button(LEFT_MOUSE, true);
 					break;
 				}
 			case RIGHT_MOUSE_DOWN:
 
 				{
 					self.src.event_map.set(RIGHT_MOUSE, true);
+					self.src.event_log.push_button(RIGHT_MOUSE, true);
 					break;
 				}
 			case OTHER_MOUSE_DOWN:
 
 				{
 					self.src.event_map.set(MIDDLE_MOUSE, true);
+					self.src.event_log.push_button(MIDDLE_MOUSE, true);
 					break;
 				}
 			case OTHER_MOUSE_UP:
 
 				{
 					self.src.event_map.set(MIDDLE_MOUSE, false);
+					self.src.event_log.push_button(MIDDLE_MOUSE, false);
 					break;
 				}
 			case KEY_PRESSED:
@@ -270,6 +281,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 					if (event_value != EMPTY_KEY)
 					{
 						self.src.event_map.set(event_value, true);
+						self.src.event_log.push_key(event_value, true);
 					}
 					// Typed text: skip command/control chords, control chars
 					// and the 0xF700 function-key range (arrows, F-keys).
@@ -302,6 +314,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 					if (event_value != EMPTY_KEY)
 					{
 						self.src.event_map.set(event_value, false);
+						self.src.event_log.push_key(event_value, false);
 					}
 				}
 			case FLAGS_CHANGED:
@@ -312,7 +325,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 					// permanently up and every chord (ctrl+Z, shift-drag) is
 					// dead while the plain keys still work, which is the
 					// confusing part.
-					apply_modifier_flags(&self.src.event_map, event.get_modifierFlags());
+					apply_modifier_flags(&self.src.event_map, &self.src.event_log, event.get_modifierFlags());
 				}
 			default:
 
@@ -326,9 +339,53 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 		self.src.app.sendEvent(event);
 	}
 
+	release_unheld_mouse_buttons(&self.src.event_map);
+
 	self.src.app.updateWindows();
 	return self.src.event_map;
 }
+
+<*
+ Clear any mouse button the hardware says is not actually held.
+
+ **The mouse-up does not always come.** AppKit runs an event loop of its own
+ while a window is being dragged by its title bar, and the release that ends
+ that drag is consumed by it: the button never arrives here as an up, the latch
+ stays set for the rest of the session, and every later movement reads as a drag
+ with the button held. Every application built on this map has to work around
+ it, and the workaround has to live in each of them.
+
+ `+[NSEvent pressedMouseButtons]` is the answer at the source. It reports the
+ buttons physically held, right now, independently of what has been delivered to
+ anybody — so a swallowed up costs one frame instead of the rest of the run.
+
+ **It only ever clears, and never sets.** A button held down over another
+ application is not this window's to react to: believing it would turn the very
+ next mouse movement across this window into a drag nobody started, which is the
+ same bug in the other direction. So the event stream stays the only thing that
+ can latch a button, and this is only allowed to unlatch one.
+*>
+fn void release_unheld_mouse_buttons(EventMap* map) @local
+{
+	ObjcClass cls = objc::getClass("NSEvent");
+	if (!(void*)cls) return;
+
+	// Bit 0 is the left button, bit 1 the right, bit 2 the first "other" —
+	// which is the middle button, and the same one OTHER_MOUSE_DOWN sets above.
+	ulong held = objc::msg_send(cls, GetULong, "pressedMouseButtons");
+
+	if ((held & 1) == 0) map.set(LEFT_MOUSE, false);
+	if ((held & 2) == 0) map.set(RIGHT_MOUSE, false);
+	if ((held & 4) == 0) map.set(MIDDLE_MOUSE, false);
+}
+
+<*
+ The key and button transitions the last `getEvent` drained, in order.
+
+ See `EventLog`. The map this sits beside is a latch and cannot describe a press
+ that began and ended between two calls; this can.
+*>
+fn Event[] Window.events(&self) => self.src.event_log.view();
 
 // Accumulated scroll-wheel delta over the last getEvent call, in points
 // (positive = scroll up / away from the user).
@@ -554,17 +611,32 @@ const int NX_ALPHA_SHIFT = 0x0001_0000;
  edge was never delivered: a modifier pressed while another app had focus,
  released while ours does, would otherwise stay latched down forever.
 *>
-fn void apply_modifier_flags(EventMap* map, int mods)
+fn void apply_modifier_flags(EventMap* map, EventLog* log, int mods)
 {
-	map.set(LEFT_CTRL,   (mods & NX_LCTRL) != 0);
-	map.set(RIGHT_CTRL,  (mods & NX_RCTRL) != 0);
-	map.set(LEFT_SHIFT,  (mods & NX_LSHIFT) != 0);
-	map.set(RIGHT_SHIFT, (mods & NX_RSHIFT) != 0);
-	map.set(LEFT_SUPER,  (mods & NX_LCMD) != 0);
-	map.set(RIGHT_SUPER, (mods & NX_RCMD) != 0);
-	map.set(LEFT_ALT,    (mods & NX_LALT) != 0);
-	map.set(RIGHT_ALT,   (mods & NX_RALT) != 0);
-	map.set(CAPS_LOCK,   (mods & NX_ALPHA_SHIFT) != 0);
+	set_modifier(map, log, LEFT_CTRL,   (mods & NX_LCTRL) != 0);
+	set_modifier(map, log, RIGHT_CTRL,  (mods & NX_RCTRL) != 0);
+	set_modifier(map, log, LEFT_SHIFT,  (mods & NX_LSHIFT) != 0);
+	set_modifier(map, log, RIGHT_SHIFT, (mods & NX_RSHIFT) != 0);
+	set_modifier(map, log, LEFT_SUPER,  (mods & NX_LCMD) != 0);
+	set_modifier(map, log, RIGHT_SUPER, (mods & NX_RCMD) != 0);
+	set_modifier(map, log, LEFT_ALT,    (mods & NX_LALT) != 0);
+	set_modifier(map, log, RIGHT_ALT,   (mods & NX_RALT) != 0);
+	set_modifier(map, log, CAPS_LOCK,   (mods & NX_ALPHA_SHIFT) != 0);
+}
+
+<*
+ One modifier, latched, and logged only when it actually changed.
+
+ Every flagsChanged rewrites the whole set, so eight of the nine calls above are
+ usually saying what the map already says. Logging those would report a shift
+ press every time control was touched — the map's own previous answer is where
+ the edge is, and it is already right there.
+*>
+fn void set_modifier(EventMap* map, EventLog* log, EventKey key, bool down) @local
+{
+	if (map.is_pressed(key) == down) return;
+	map.set(key, down);
+	log.push_key(key, down);
 }
 
 // Convert macOS keycode to unified EventKey
