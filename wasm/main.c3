@@ -16,6 +16,7 @@ struct JsEvent
 struct WasmWindow
 {
 	EventMap event_map;
+	EventLog event_log;    // the transitions behind the map, same call
 	float[<2>] mouse_pos;
 }
 
@@ -52,9 +53,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 {
 	JsEvent event;
 
-	// Reset scroll state each frame
+	// Per-frame state: the transition log covers this call only; the latched
+	// key/button map persists across frames.
 	self.src.event_map.set(MOUSE_SCROLL_UP, false);
 	self.src.event_map.set(MOUSE_SCROLL_DOWN, false);
+	self.src.event_log.clear();
 
 	while (js_poll_event(&event) != 0)
 	{
@@ -65,24 +68,28 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, true);
+					self.src.event_log.push_key(key, true);
 				}
 			case 2: // key up
 				EventKey key = jsKeyToEventKey(event.code);
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, false);
+					self.src.event_log.push_key(key, false);
 				}
 			case 3: // mouse button down
 				EventKey key = jsMouseToEventKey(event.code);
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, true);
+					self.src.event_log.push_button(key, true);
 				}
 			case 4: // mouse button up
 				EventKey key = jsMouseToEventKey(event.code);
 				if (key != EMPTY_KEY)
 				{
 					self.src.event_map.set(key, false);
+					self.src.event_log.push_button(key, false);
 				}
 			case 5: // scroll
 				if (event.code == 0)
@@ -101,6 +108,14 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 
 	return self.src.event_map;
 }
+
+<*
+ The key and button transitions the last `getEvent` drained, in order.
+
+ See `EventLog`. The map this sits beside is a latch and cannot describe a press
+ that began and ended between two calls; this can.
+*>
+fn Event[] Window.events(&self) => self.src.event_log.view();
 
 fn void Window.free(&self)
 {

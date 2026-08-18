@@ -28,6 +28,11 @@ alias SendPostEvent = fn void*(void*, ObjcSelector, NSEvent, bool);
 //  does in SendContentRec.
 alias SendOtherEvent = fn void*(void*, ObjcSelector, ulong, NSPoint, ulong, double, long, void*, short, long, long);
 alias GetInt = fn int(void*, ObjcSelector);
+// +[NSEvent pressedMouseButtons] returns an NSUInteger, which is 64 bits wide
+// on every Mac this builds for. Reading it back as an int would work by luck —
+// the flags that matter live in the low three bits — and stop working the day
+// anything above bit 31 is ever set.
+alias GetULong = fn ulong(void*, ObjcSelector);
 alias GetDouble = fn double(void*, ObjcSelector);
 // Objective-C BOOL is a signed char, so only the low byte of the return
 // register is defined — reading one back as an int picks up whatever was in the

@@ -199,6 +199,22 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 	}
 }
 
+<*
+ The key and button transitions the last `getEvent` drained, in order.
+
+ See `EventLog`. The map this sits beside is a latch and cannot describe a press
+ that began and ended between two calls; this can.
+*>
+fn Event[] Window.events(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return ((WaylandWindow*)self.src.backend_data).event_log.view();
+		case X11:     return ((X11Window*)self.src.backend_data).event_log.view();
+		default:      return {};
+	}
+}
+
 // Free window resources
 fn void Window.free(self)
 {

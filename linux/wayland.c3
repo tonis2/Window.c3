@@ -57,6 +57,7 @@ struct WaylandWindow
 	Buffer buffer;
 	bool initialized;
 	EventMap event_map;
+	EventLog event_log;    // the transitions behind the map, same poll
 	float[<2>] mouse_pos;
 	bool close_requested; // set by the xdg_toplevel close event
 	double scroll_delta; // accumulated over the last poll (points, + = up)
@@ -424,6 +425,7 @@ fn void kbKey(WaylandWindow* data, void* kb, uint serial, uint type, uint key, u
 	if (keyboard_key != EMPTY_KEY)
 	{
 		data.event_map.set(keyboard_key, (bool)state);
+		data.event_log.push_key(keyboard_key, (bool)state);
 	}
 
 	// Typed text: printable characters on key-down only. Prefer the layout-aware
@@ -476,18 +478,21 @@ fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint tim
 	if (button == 272)
 	{
 		data.event_map.set(LEFT_MOUSE, (bool)state);
+		data.event_log.push_button(LEFT_MOUSE, (bool)state);
 	}
 
 	// Right mouse button
 	if (button == 273)
 	{
 		data.event_map.set(RIGHT_MOUSE, (bool)state);
+		data.event_log.push_button(RIGHT_MOUSE, (bool)state);
 	}
 
 	// Middle mouse button
 	if (button == 274)
 	{
 		data.event_map.set(MIDDLE_MOUSE, (bool)state);
+		data.event_log.push_button(MIDDLE_MOUSE, (bool)state);
 	}
 }
 
@@ -991,6 +996,7 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 	self.scroll_delta_x = 0;
 	self.scroll_precise = false;
 	self.text.clear();
+	self.event_log.clear();
 
 	// Non-blocking event dispatch
 	while (prepare_read(self.display) != 0)

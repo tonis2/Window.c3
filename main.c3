@@ -33,6 +33,60 @@ struct Event
 	float mouse_y;
 }
 
+<*
+ What `getEvent` drained, in the order it arrived.
+
+ **The map is a latch and the log is a queue, and they answer different
+ questions.** `EventMap` says what is held *right now*, which is the only
+ sensible answer for "is W down" and is no answer at all for a key that went
+ down and back up between two calls: the flag is set and cleared before anybody
+ looks, and the press is invisible. A person cannot type that fast — eighty
+ milliseconds on a key is five frames at 60Hz — but synthetic input can, a key
+ repeat that lands badly can, and any frame that runs long can.
+
+ Bounded, and a fixed array rather than a list: a window that is not being
+ pumped has no way to grow this without limit, and nothing here has to be
+ allocated, initialised or freed. Five hundred and twelve transitions is more
+ than a keyboard can produce between two frames by a wide margin; past it the
+ oldest are kept and the newest dropped, because the ones already recorded are
+ the ones something is waiting to be told about.
+
+ Only `type` and `value` are filled. Where the pointer was is `getMousePos`,
+ which is one call and always current, rather than a copy per event.
+*>
+const usz MAX_EVENT_LOG = 512;
+
+struct EventLog
+{
+	Event[MAX_EVENT_LOG] item;
+	usz count;
+}
+
+fn void EventLog.clear(&self) { self.count = 0; }
+
+fn void EventLog.push(&self, EventType type, EventKey key)
+{
+	if (key == EMPTY_KEY || self.count >= MAX_EVENT_LOG) return;
+	self.item[self.count] = { .type = type, .value = key };
+	self.count++;
+}
+
+<*
+ Records a key or button transition, choosing the event type from the direction.
+ The two `set` calls a backend already makes become two lines instead of one.
+*>
+fn void EventLog.push_key(&self, EventKey key, bool down)
+{
+	self.push(down ? EventType.KEY_PRESSED : EventType.KEY_RELEASED, key);
+}
+
+fn void EventLog.push_button(&self, EventKey key, bool down)
+{
+	self.push(down ? EventType.MOUSE_PRESSED : EventType.MOUSE_RELEASED, key);
+}
+
+fn Event[] EventLog.view(&self) => self.item[:self.count];
+
 struct Params
 {
 	int x;
