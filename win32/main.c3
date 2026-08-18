@@ -110,10 +110,26 @@ extern fn bool getWindowRect(HWnd hwnd, Rect* rect) @cname("GetWindowRect");
 extern fn bool getClientRect(HWnd hwnd, Rect* rect) @cname("GetClientRect");
 
 // Windows 10 1607 and later. Answers in dots per inch for the display this
-// window is on — 96 being 1:1 — and answers 96 whatever the display is doing
-// when the process has not declared itself DPI-aware, which is a manifest the
-// application supplies and not something a library can decide for it.
+// window is on, 96 being 1:1 — and answers 96 whatever the display is doing
+// unless the process has declared itself DPI-aware, which `new` does below.
 extern fn uint getDpiForWindow(HWnd hwnd) @cname("GetDpiForWindow");
+
+// The same for the primary display, and the only one of the two that can be
+// asked before a window exists. Windows 10 1607 and later.
+extern fn uint getDpiForSystem() @cname("GetDpiForSystem");
+
+// Windows 10 1703 and later. Fails — harmlessly — when the awareness has
+// already been set, which is what happens if the application ships a manifest
+// that says so; the manifest wins and this is a no-op.
+extern fn bool setProcessDpiAwarenessContext(void* context) @cname("SetProcessDpiAwarenessContext");
+
+// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2. A pseudo-handle rather than a
+// pointer to anything, which is why it is written as a cast of -4 and not as a
+// constant with a type.
+const void* DPI_PER_MONITOR_AWARE_V2 = (void*)(uptr)(iptr)-4;
+
+// What Windows calls 100%: the DPI at which one logical unit is one pixel.
+const float USER_DEFAULT_SCREEN_DPI = 96.0;
 
 
 struct Win32Window
@@ -123,6 +139,7 @@ struct Win32Window
 	HDc hdc;
 	EventMap event_map;
 	EventLog event_log;     // the transitions behind the map, same call
+	bool close_requested;   // set by WM_QUIT, queried via Window.should_close
 	float[<2>] mouse_pos;
 	double scroll_delta;    // accumulated over the last getEvent call (+ = away)
 	double scroll_delta_x;  // the horizontal half (+ = right)
@@ -147,8 +164,46 @@ fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @cname(
 	}
 }
 
+<*
+ Open a window.
+
+ **`params` are logical units, and this is where Windows is made to agree.**
+ Every other backend reports a cursor, a size and a scale in units that are the
+ same size on screen whatever the display density, and answers `get_scale` with
+ the ratio between those and pixels. Windows only does that for a process that
+ has said it understands DPI: without the declaration the compositor stretches
+ the whole window afterwards, `GetDpiForWindow` answers 96 to keep the lie
+ consistent, and a 4K display gets a blurry window and a scale of 1.
+
+ So the declaration is made here, before any window exists, and the requested
+ size is multiplied by the display's DPI — which keeps a window the same
+ physical size it was before this line was added, and makes `get_scale` mean
+ what it means everywhere else.
+
+ It is a library making a process-wide decision, which is worth being uneasy
+ about. The defence is that it is the same decision the other backends have
+ already had made for them by their platform, that a window library is the piece
+ that knows what a "logical unit" is meant to be, and that an application which
+ disagrees can say so in its manifest — the manifest is applied first and this
+ call then fails and changes nothing.
+
+ **Not yet per-monitor in practice.** The context asked for is the per-monitor
+ one, but nothing here handles `WM_DPICHANGED`, so a window dragged between
+ displays of different densities keeps the size it was given and `get_scale`
+ starts answering the new display's ratio. The parts that read the scale every
+ frame — a cursor, a pan — follow it correctly; the window's own size does not.
+*>
 fn Window? new(Params params, String name)
 {
+	// Before the window, and before anything reads a coordinate: this changes
+	// what every number in the process means.
+	setProcessDpiAwarenessContext(DPI_PER_MONITOR_AWARE_V2);
+
+	uint dpi = getDpiForSystem();
+	if (dpi == 0) dpi = (uint)USER_DEFAULT_SCREEN_DPI;
+	int scaled_width  = (int)((float)params.width * (float)dpi / USER_DEFAULT_SCREEN_DPI);
+	int scaled_height = (int)((float)params.height * (float)dpi / USER_DEFAULT_SCREEN_DPI);
+
 	HInstance instance = getModuleHandleW(null);
 
 	// Convert name to wide string
@@ -203,8 +258,8 @@ fn Window? new(Params params, String name)
 		win32::WS_OVERLAPPEDWINDOW, // Style
 		params.x, // X position
 		params.y, // Y position
-		params.width, // Width
-		params.height, // Height
+		scaled_width, // Width, in the pixels a DPI-aware process is measured in
+		scaled_height, // Height
 		null, // Parent
 		null, // Menu
 		instance, // Instance
@@ -227,12 +282,35 @@ fn Window? new(Params params, String name)
 	};
 }
 
+<*
+ Where the pointer is, window-relative.
+
+ **Two conversions, and neither is optional if this is to answer the question
+ the other backends answer.** Win32 reports the client area in physical pixels
+ with a top-left origin; the c3w contract is the window's own logical units with
+ a bottom-left one — Cocoa's, which the Linux backends also convert to and which
+ the reference renderer flips back.
+
+ The height is read off `GetClientRect` rather than off `Window.height`, because
+ the flip has to use the size the window *is* and `Window.height` is only ever
+ the size `new` was asked for. A window that has been resized would otherwise
+ report a cursor offset by however much it grew, and only vertically, which is
+ the sort of thing that reads as a bad picker rather than as a stale field.
+*>
 fn float[<2>] Window.getMousePos(&self)
 {
 	Point point;
 	getCursorPos(&point);
 	screenToClient(self.src.hwnd, &point);
-	return { (float)point.x, (float)point.y };
+
+	Rect client;
+	if (!getClientRect(self.src.hwnd, &client)) return { 0, 0 };
+
+	float scale = self.get_scale();
+	if (scale <= 0.0f) scale = 1.0f;
+
+	float bottom_up = (float)(client.bottom - client.top) - (float)point.y;
+	return { (float)point.x / scale, bottom_up / scale };
 }
 
 <*
@@ -268,7 +346,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 		switch (msg.message)
 		{
 			case WM_QUIT:
-				self.src.event_map.set(ESCAPE, true);
+				// Posted by `windowProc`'s WM_CLOSE. It used to latch ESCAPE
+				// here, which worked only because the one application reading
+				// this happened to exit on Escape — and cost that application
+				// the Escape key, which reads as held for the rest of the run.
+				self.src.close_requested = true;
 			case WM_KEYDOWN:
 				EventKey key = win32VkToEventKey((uint)msg.wParam);
 				if (key != EMPTY_KEY)
@@ -674,13 +756,19 @@ fn void Window.set_size(&self, int width, int height)
 	int chrome_width  = (frame.right - frame.left) - (client.right - client.left);
 	int chrome_height = (frame.bottom - frame.top) - (client.bottom - client.top);
 
+	// The rects are physical pixels — `new` declared this process DPI-aware —
+	// and the arguments are logical units, which is the contract this shares
+	// with every other backend. The chrome is already physical and stays so.
+	float scale = self.get_scale();
+	if (scale <= 0.0f) scale = 1.0f;
+
 	setWindowPos(
 		self.src.hwnd,
 		(HWnd)null,
 		0,
 		0,
-		width + chrome_width,
-		height + chrome_height,
+		(int)((float)width * scale) + chrome_width,
+		(int)((float)height * scale) + chrome_height,
 		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
 	);
 }
@@ -715,19 +803,23 @@ fn bool Window.get_scroll_precise(&self) => false;
 // the next one.
 fn String Window.get_text(&self) => self.src.text.str_view();
 
-fn bool Window.should_close(&self) => false;
+<*
+ Whether the window manager has asked this window to close.
+
+ `windowProc` answers WM_CLOSE with `PostQuitMessage`, which lands here as
+ WM_QUIT on the next drain. One flag on the window rather than one for the
+ process, which is what the darwin backend has and what it would want.
+*>
+fn bool Window.should_close(&self) => self.src.close_requested;
 fn void Window.set_cursor(&self, CursorShape shape) { }
 
 <*
  Framebuffer pixels per logical window unit.
 
- **1.0 unless the process has declared itself DPI-aware**, and that declaration
- is the application's manifest rather than anything a window library may do on
- its behalf: turning it on changes what every coordinate in the process means,
- including the size this window was asked for. `GetDpiForWindow` answers 96 for
- an unaware process by design, so this answers 1.0 and everything downstream
- stays consistent — which is the same answer the old stub gave, now for a
- reason rather than for want of an implementation.
+ 1.0 on a standard-density display and 2.0 at 200%, matching what the darwin and
+ wayland backends report. It is only meaningful because `new` declared the
+ process DPI-aware; without that Windows answers 96 here whatever the display is
+ doing, and says so on purpose — see `new`.
 *>
 fn float Window.get_scale(&self)
 {
