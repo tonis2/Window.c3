@@ -481,12 +481,15 @@ fn void Window.set_minimized(&self, bool minimized)
 	}
 }
 
+// No [NSApp terminate:] here — it exits the whole process, which a destructor
+// may not do: a test suite (or any host) that frees a window still has work
+// left. The shared NSApplication has nothing to release; it dies with the
+// process.
 fn void Window.free(&self)
 {
 	self.src.text.free();
 	self.src.layer.release();
 	self.src.window.release();
-	self.src.app.terminate();
 }
 
 // Dynamic library loading (POSIX, available on macOS)
