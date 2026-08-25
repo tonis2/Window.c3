@@ -19,6 +19,8 @@ alias SendSize = fn void*(void*, ObjcSelector, NSSize);
 // -[NSWindow setFrame:display:]. NSRect rides in the float registers as an HFA,
 // the same way it does in SendContentRec.
 alias SendRectBool = fn void*(void*, ObjcSelector, NSRect, bool);
+// -[NSView initWithFrame:]. Same HFA rule for the NSRect.
+alias SendRect = fn void*(void*, ObjcSelector, NSRect);
 alias SendString = fn void*(void*, ObjcSelector, ZString);
 alias SendPostEvent = fn void*(void*, ObjcSelector, NSEvent, bool);
 // +[NSEvent otherEventWithType:location:modifierFlags:timestamp:windowNumber:
@@ -349,7 +351,19 @@ fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId,
 fn double NSWindow.backing_scale_factor(&self) => objc::msg_send(self.id, GetDouble, "backingScaleFactor");
 fn void CALayer.set_contents_scale(&self, double scale) => objc::msg_send(self.id, SendDouble, "setContentsScale:", scale);
 
-fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "contentView", view.id);
+// The selector here was "contentView" — the *getter*, sent with an argument the
+// runtime then ignored. It read as a setter and set nothing, which went unnoticed
+// because the only caller passed the view it had just read back off the window.
+fn void NSWindow.set_view(&self, NSView view) => objc::msg_send(self.id, SendId, "setContentView:", view.id);
+
+// Returns BOOL — the window refuses if the current first responder will not
+// resign. Nothing here has anything to resign, so the answer is not read.
+fn void NSWindow.make_first_responder(&self, NSView view) => objc::msg_send(self.id, SendId, "makeFirstResponder:", view.id);
+
+fn void NSView.initWithFrame(&self, NSRect frame)
+{
+	self.id = objc::msg_send(self.id, SendRect, "initWithFrame:", frame);
+}
 fn NSPoint NSWindow.get_mouse_pos(&self) => objc::msg_send(self.id, GetPoint, "mouseLocationOutsideOfEventStream");
 
 fn NSView NSWindow.get_view(&self)

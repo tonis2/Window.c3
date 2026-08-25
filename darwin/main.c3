@@ -31,6 +31,32 @@ fn bool on_close(ObjcId self)
 	return true;
 }
 
+<*
+ Take a key event off the responder chain and drop it.
+
+ The whole body of both overrides. `getEvent` has already read this event out of
+ the queue — the map is latched, the text is decoded, the log has the edge — and
+ AppKit is only being handed it afterwards so that window and application
+ machinery (activation, key equivalents, the cursor) still sees it go past.
+ Handling it here means "yes, that one is dealt with", which is exactly true.
+
+ What it buys is silence. Without a `keyDown:` somewhere in the chain the event
+ reaches `-[NSResponder noResponderFor:]`, and that beeps. `keyUp:` is overridden
+ too, and beeps nothing — but the view is first responder now, so leaving it out
+ would send every release on a walk up to the window to be discarded there.
+
+ The selector is the second argument because that is how an Objective-C method
+ is called; both are unused, and are named for the reader.
+*>
+fn void swallow_key(ObjcId self, ObjcSelector cmd, NSEvent event) @local
+{
+}
+
+// -[NSView acceptsFirstResponder]. NO on a plain NSView, which is what leaves
+// the window first responder and every keystroke unhandled. Objective-C BOOL is
+// a signed char — see the GetBool note in objc.c3.
+fn char accepts_first_responder(ObjcId self, ObjcSelector cmd) @local => 1;
+
 // windowWillResize:toSize: — accept whatever size the drag proposes. Nothing is
 // recorded here: AppKit calls this many times a second for the whole of a live
 // resize, and the host reads the size it settled on off the surface instead.
@@ -85,13 +111,53 @@ fn Window? new(Params params, String name)
 	app.activateIgnoringOtherApps(true);
 	app.finishLaunching();
 
+	// The content view AppKit hands out is a plain NSView, and a plain NSView
+	// refuses first responder. So the window itself stays first responder, every
+	// key event walks the responder chain without being handled, and falls off
+	// the end into -[NSResponder noResponderFor:] — which calls NSBeep() for
+	// keyDown:. That beep is the click macOS makes on every press of a movement
+	// key, once per keystroke, for as long as the window is up.
+	//
+	// The events are already ours: getEvent drains them from the queue and reads
+	// them before dispatching, so by the time AppKit routes one there is nothing
+	// left for a responder to do. The view only has to be willing to be asked.
+	// Cmd chords are unaffected — -[NSWindow sendEvent:] offers a key equivalent
+	// around the responder chain, not through it.
+	//
+	// AppKit's own content view is the fallback: everything above it here is
+	// written to survive a nil class — a build with no AppKit linked reaches
+	// this line with a nil window and a nil view and simply does nothing — and
+	// making a class pair out of a nil superclass would be the one step that
+	// aborts instead. Second window in a process: the name is already taken, so
+	// the class is looked up rather than made.
 	NSView view = win.get_view();
-	// new_object("NSView");
 
-	// view.alloc();
+	NSObject view_cls = { .cls = objc::lookUpClass("C3WContentView") };
+	if ((void*)view_cls.cls == null && (void*)objc::getClass("NSView") != null)
+	{
+		view_cls = new_object("NSView");
+		view_cls.alloc_class_pair("C3WContentView", 0);
+		view_cls.add_method("acceptsFirstResponder", &accepts_first_responder, "c@:")!!;
+		view_cls.add_method("keyDown:", &swallow_key, "v@:@")!!;
+		view_cls.add_method("keyUp:", &swallow_key, "v@:@")!!;
+		objc::registerClassPair(view_cls.cls);
+	}
 
-	// view.init();
+	if ((void*)view_cls.cls != null)
+	{
+		view = view_cls;
+		view.alloc();
+		view.initWithFrame({ { 0, 0 }, { params.width, params.height } });
 
+		// Before the layer, so the frame the window gives the content view is
+		// the one CAMetalLayer derives its drawable size from.
+		win.set_view(view);
+		win.make_first_responder(view);
+		// setContentView: retained it, so the window owns the view from here
+		// and releasing it with the window is enough. `src.view` outlives this
+		// only because the window holds it.
+		view.release();
+	}
 
 	CALayer layer = new_object("CAMetalLayer");
 	layer.alloc();
@@ -99,7 +165,6 @@ fn Window? new(Params params, String name)
 
 	view.set_layer(layer);
 	view.wants_Layer(true);
-	win.set_view(view);
 
 	// A layer attached by hand makes the view layer-HOSTING: AppKit leaves the
 	// layer's contentsScale at 1.0, so on a retina display the Metal drawable
