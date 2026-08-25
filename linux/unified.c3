@@ -28,6 +28,13 @@ struct LinuxWindow
 	float height;
 	EventMap event_map;
 	float[<2>] mouse_pos;
+
+	// The cursor's movement over the last `getEvent`, differenced from where it
+	// was at the previous one. `has_last` is what stops the first call
+	// reporting the trip from a remembered zero as a hand movement.
+	float[<2>] mouse_delta;
+	float[<2>] last_mouse;
+	bool has_last;
 }
 
 // Auto-detect which display server to use
@@ -184,20 +191,79 @@ fn void Window.wake(&self)
 // at ~0% CPU; otherwise it polls and returns immediately.
 fn EventMap Window.getEvent(&self, bool wait = false)
 {
+	EventMap map;
 	switch (self.src.backend)
 	{
 		case WAYLAND:
 			WaylandWindow* wl = (WaylandWindow*)self.src.backend_data;
 			wayland_pollEvents(wl, wait);
-			return wl.event_map;
+			map = wl.event_map;
 		case X11:
 			X11Window* x11 = (X11Window*)self.src.backend_data;
 			x11_pollEvents(x11, wait);
-			return x11.event_map;
+			map = x11.event_map;
 		default:
-			return self.src.event_map;
+			map = self.src.event_map;
 	}
+
+	self.track_mouse_delta();
+	return map;
 }
+
+<*
+ Difference the cursor's position against the previous `getEvent`.
+
+ The whole of what `getMouseDelta` reports on Linux, and it is the weaker half
+ of the two things a delta can be: it stops at the edge of the screen, because
+ that is where the cursor stops. See `setPointerLock` for the half that is
+ missing and what it would take.
+*>
+fn void Window.track_mouse_delta(&self) @local
+{
+	float[<2>] at = self.getMousePos();
+	self.src.mouse_delta = self.src.has_last ? (float[<2>]) { at.x - self.src.last_mouse.x, at.y - self.src.last_mouse.y } : (float[<2>]) { 0, 0 };
+	self.src.last_mouse = at;
+	self.src.has_last = true;
+}
+
+<*
+ The cursor's movement over the last `getEvent`, in the same points
+ `getMousePos` answers in and with the same bottom-left origin — so `[1]` is
+ positive UPWARD here, where the darwin backend reports AppKit's downward
+ `deltaY`. `scene/input.c3` is where either is turned into image pixels.
+*>
+fn float[<2>] Window.getMouseDelta(&self) => self.src.mouse_delta;
+
+<*
+ Pointer lock — **not implemented on either Linux backend**, and this reports
+ that rather than pretending.
+
+ `pointerLocked` goes on answering false after a call to this, so a script can
+ find out that the platform did not take it and fall back to a drag-look. The
+ alternative — recording the flag and answering true — would leave a game whose
+ look silently stops at the edge of the screen, which is the exact failure a
+ lock exists to remove and reads as the mouse being broken.
+
+ What each backend needs, both of which are window-library work rather than
+ anything this file can do:
+
+ - **X11**: `XDefineCursor` with a 1x1 transparent pixmap to hide it, and
+   `XWarpPointer` back to the window's centre on every frame the cursor
+   strays — the same recentre the darwin backend does, and simpler there
+   because X11 has no local-event suppression to defeat.
+ - **Wayland**: the `zwp_pointer_constraints_v1` protocol —
+   `lock_pointer` plus `zwp_relative_pointer_v1` for the deltas. There is no
+   warp on Wayland by design; a client cannot move the cursor at all, so this
+   is not an X11 shortcut away, it is a protocol binding this repository does
+   not have. `linux/xdg_shell.c3` is the shape a second one would take.
+
+ `plan.md` §1 is where this belongs on the list: neither backend has had a
+ window on screen since any of the mouse work, so this would be written blind
+ and could not be checked.
+*>
+fn void Window.setPointerLock(&self, bool locked) { }
+
+fn bool Window.pointerLocked(&self) => false;
 
 <*
  The key and button transitions the last `getEvent` drained, in order.

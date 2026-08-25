@@ -290,3 +290,23 @@ fn String Window.get_text(&self) => "";
 fn bool Window.should_close(&self) => false;
 fn void Window.set_cursor(&self, CursorShape shape) { }
 fn float Window.get_scale(&self) => 1.0;
+
+<*
+ Pointer lock — **not implemented on the wasm backend**, and this says so by
+ answering false rather than by recording the flag.
+
+ The browser has the real thing and it is better than any of the native ones:
+ `Element.requestPointerLock()` gives `movementX`/`movementY` straight out of
+ the platform. What it does not give is a synchronous entry point — the request
+ must come from a user gesture and resolves through an event — so wiring it up
+ is a change to `wasm/bridge.c3` and the JavaScript beside it rather than a
+ function here.
+
+ `getMouseDelta` differences the position, which is the same weaker answer the
+ Linux backends give and is right until the cursor reaches the edge.
+*>
+fn void Window.setPointerLock(&self, bool locked) { }
+
+fn bool Window.pointerLocked(&self) => false;
+
+fn float[<2>] Window.getMouseDelta(&self) => { 0, 0 };

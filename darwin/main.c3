@@ -18,6 +18,18 @@ struct DarwinWindow
 	double scroll_delta_x;  // the horizontal half, same accumulation
 	bool scroll_precise;    // that scroll came from a trackpad, not a wheel
 	DString text;           // UTF-8 typed during the last getEvent call
+
+	// The mouse's own movement over the last getEvent call, in points, summed
+	// off every motion event. Positive y is DOWN — AppKit's convention for
+	// `deltaY`, and the opposite of `locationInWindow`'s.
+	double mouse_dx;
+	double mouse_dy;
+
+	// Whether the cursor is currently decoupled from the mouse and hidden.
+	// Held because -[NSCursor hide] is COUNTED: two hides need two unhides, and
+	// a second lock that hid the cursor again would leave it invisible after
+	// the unlock that was meant to bring it back.
+	bool pointer_locked;
 }
 
 // Set by the windowShouldClose: delegate; queried via Window.should_close.
@@ -251,6 +263,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 	self.src.scroll_delta = 0;
 	self.src.scroll_delta_x = 0;
 	self.src.scroll_precise = false;
+	// Per-frame like the scroll, and for the same reason: it is what happened
+	// during this call, and a caller that kept it would be told about the same
+	// hand movement twice.
+	self.src.mouse_dx = 0;
+	self.src.mouse_dy = 0;
 	self.src.text.clear();
 	// The log is per-frame for the same reason the text is: it is a record of
 	// what happened *during this call*, and a caller that kept it would be
@@ -294,6 +311,21 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 					{
 						self.src.event_map.set(MOUSE_SCROLL_DOWN, true);
 					}
+					break;
+				}
+			case MOUSE_MOVED:
+			case LEFT_MOUSE_DRAGGED:
+			case RIGHT_MOUSE_DRAGGED:
+			case OTHER_MOUSE_DRAGGED:
+
+				{
+					// Summed rather than taken from the last event: a frame
+					// drains every motion event queued since the previous one,
+					// and reading only the newest throws away most of a fast
+					// swipe. The dragged variants are here because a look while
+					// a button is held arrives as a drag and is still movement.
+					self.src.mouse_dx += event.get_delta_x();
+					self.src.mouse_dy += event.get_delta_y();
 					break;
 				}
 			case LEFT_MOUSE_UP:
@@ -406,6 +438,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 
 	release_unheld_mouse_buttons(&self.src.event_map);
 
+	// After the drain, so the warp's own motion event is not in this frame's
+	// deltas — it lands in the next call's queue, and by then the cursor is
+	// where the warp put it, which is a delta of nothing.
+	self.keep_pointer_centred();
+
 	self.src.app.updateWindows();
 	return self.src.event_map;
 }
@@ -495,6 +532,122 @@ fn void Window.set_cursor(&self, CursorShape shape)
 }
 
 <*
+ The mouse's own movement over the last `getEvent`, in points.
+
+ **Not a position difference**, and that is the whole reason it exists. The
+ cursor stops at the edge of the screen and a hand does not, so a look built by
+ differencing `getMousePos` across frames stops turning the moment the pointer
+ reaches the edge — and stops entirely under `setPointerLock`, where the cursor
+ does not move at all. This keeps reporting in both cases.
+
+ `[0]` is right and `[1]` is UP — the same convention `getMousePos` answers in,
+ and the same one every other backend's `getMouseDelta` uses. AppKit's own
+ `deltaY` counts the other way and is negated on the way in; see the
+ accumulation in `getEvent`.
+*>
+fn float[<2>] Window.getMouseDelta(&self)
+{
+	return { (float)self.src.mouse_dx, (float)self.src.mouse_dy };
+}
+
+<*
+ Take the cursor out of the user's hands, or give it back.
+
+ Hidden, and recentred by `keep_pointer_centred` below. **The look itself does
+ not depend on either**: it is built from `getMouseDelta`, which is the mouse's
+ own reported movement and keeps arriving whatever the cursor is doing. Hiding
+ and recentring are about the *cursor* — that it cannot be seen sitting in the
+ middle of the picture, and that it cannot wander onto another application and
+ take a click with it.
+
+ **`CGAssociateMouseAndCursorPosition` is not used, and that is not an
+ oversight.** It is the documented way to say "stop the mouse moving the
+ cursor", every engine calls it, and on this macOS it is no longer an exported
+ symbol — the link fails with an undefined `_CGAssociateMouseAndCursorPosition`
+ and neither the header nor the documentation says anything about it. Measured
+ on Darwin 25: `CGWarpMouseCursorPosition`, `CGDisplayHideCursor` and
+ `CGSetLocalEventsSuppressionInterval` are all still exported and that one is
+ not. So the warp is the mechanism here rather than the fallback.
+
+ **The suppression interval is the trap the warp brings with it.** After a warp,
+ CoreGraphics ignores local mouse events for a quarter of a second by default,
+ which is exactly what a mouse look is made of — the picture stutters once per
+ recentre and the cause is nowhere near the code that recentres. Setting the
+ interval to zero is the whole fix and it is one call.
+
+ **`[NSCursor hide]` is counted**, so this is guarded by the flag and is a no-op
+ when it would be a repeat. Two hides and one unhide is a cursor that never
+ comes back, and the only way out of that is to quit the application.
+*>
+fn void Window.setPointerLock(&self, bool locked)
+{
+	if (locked == self.src.pointer_locked) return;
+	self.src.pointer_locked = locked;
+
+	ObjcClass cursor = objc::getClass("NSCursor");
+	if (locked)
+	{
+		// Zero, once per lock. Deprecated since 10.6 and still the only way to
+		// say it: the replacement takes an event source this window does not
+		// own and would need one created and released around every warp.
+		cg_set_suppression_interval(0.0);
+		if ((void*)cursor) objc::msg_send(cursor, SendVoid, "hide");
+		self.keep_pointer_centred(force: true);
+		return;
+	}
+	if ((void*)cursor) objc::msg_send(cursor, SendVoid, "unhide");
+}
+
+fn bool Window.pointerLocked(&self) => self.src.pointer_locked;
+
+<*
+ Put the cursor back in the middle of the window, if it has strayed far enough
+ to be worth doing.
+
+ **Not every frame.** A warp is a round trip to the window server and it
+ perturbs the event stream; doing it sixty times a second to move the cursor a
+ few pixels is all cost. The cursor only has to stay off the screen's edges and
+ inside this window, so it is left alone while it is anywhere in the middle half
+ and snapped back when it leaves — which for ordinary mouse movement is a
+ handful of times a minute rather than once a frame.
+
+ The two coordinate systems are the part to get right. An `NSWindow` frame is in
+ Cocoa screen points, origin at the BOTTOM left of the main display;
+ `CGWarpMouseCursorPosition` takes Quartz global points, origin at the TOP left.
+ The flip is against the main display's height, which is what `CGDisplayBounds`
+ is called for.
+*>
+fn void Window.keep_pointer_centred(&self, bool force = false)
+{
+	if (!self.src.pointer_locked) return;
+
+	NSRect frame = objc::msg_send(self.src.window.id, GetRect, "frame");
+	if (frame.size.width <= 0 || frame.size.height <= 0) return;
+
+	if (!force)
+	{
+		NSPoint at = self.src.window.get_mouse_pos();
+		double margin_x = frame.size.width * 0.25;
+		double margin_y = frame.size.height * 0.25;
+		bool inside = at.x > margin_x && at.x < frame.size.width - margin_x
+			&& at.y > margin_y && at.y < frame.size.height - margin_y;
+		if (inside) return;
+	}
+
+	NSRect screen = cg_display_bounds(cg_main_display());
+	double centre_x = frame.origin.x + frame.size.width * 0.5;
+	double centre_y = frame.origin.y + frame.size.height * 0.5;
+	cg_warp_cursor({ centre_x, screen.size.height - centre_y });
+}
+
+// The C3 names are lower case because names starting with a capital are
+// reserved for types; `@cname` is what actually reaches the linker.
+extern fn int cg_warp_cursor(NSPoint point) @cname("CGWarpMouseCursorPosition");
+extern fn int cg_set_suppression_interval(double seconds) @cname("CGSetLocalEventsSuppressionInterval");
+extern fn uint cg_main_display() @cname("CGMainDisplayID");
+extern fn NSRect cg_display_bounds(uint display) @cname("CGDisplayBounds");
+
+<*
  Resize the window, in the same logical points `new` took.
 
  `new` builds the window with `initWithContentRect:`, so its `params` are the
@@ -550,8 +703,17 @@ fn void Window.set_minimized(&self, bool minimized)
 // may not do: a test suite (or any host) that frees a window still has work
 // left. The shared NSApplication has nothing to release; it dies with the
 // process.
+<*
+ Give the cursor back before the window goes.
+
+ A process that exits while the pointer is locked leaves the cursor hidden and
+ decoupled for the whole session — `[NSCursor hide]` is a global counter and
+ `CGAssociateMouseAndCursorPosition` is a global switch, and neither is undone
+ by a window closing. The only fix from the user's side is logging out.
+*>
 fn void Window.free(&self)
 {
+	self.setPointerLock(false);
 	self.src.text.free();
 	self.src.layer.release();
 	self.src.window.release();

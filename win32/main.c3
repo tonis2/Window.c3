@@ -85,6 +85,10 @@ extern fn HIcon loadIconW(HInstance instance, Char16* name) @cname("LoadIconW");
 
 
 extern fn bool getCursorPos(Point* point) @cname("GetCursorPos");
+extern fn bool setCursorPos(int x, int y) @cname("SetCursorPos");
+extern fn bool clientToScreen(HWnd hwnd, Point* point) @cname("ClientToScreen");
+extern fn bool clipCursor(Rect* rect) @cname("ClipCursor");
+extern fn int showCursor(bool show) @cname("ShowCursor");
 
 
 extern fn bool screenToClient(HWnd hwnd, Point* point) @cname("ScreenToClient");
@@ -147,6 +151,15 @@ struct Win32Window
 	// A WM_CHAR carries one UTF-16 code unit, so anything past the basic plane
 	// arrives as two messages. The first is held here until the second comes.
 	Char16 pending_surrogate;
+
+	// The cursor's movement over the last `getEvent`, differenced from where it
+	// was at the previous one. `has_last` is what stops the first call
+	// reporting the trip from a remembered zero as a hand movement.
+	float[<2>] mouse_delta;
+	float[<2>] last_mouse;
+	bool has_last;
+
+	bool pointer_locked;
 }
 
 // Window procedure callback
@@ -410,6 +423,11 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 			default:
 		}
 	}
+
+	// After the drain, so the recentre's own WM_MOUSEMOVE lands in the next
+	// call's queue rather than in this frame's delta.
+	self.track_mouse_delta();
+	self.keep_pointer_centred();
 
 	return self.src.event_map;
 }
@@ -869,4 +887,125 @@ fn void Window.append_typed(&self, Char16 unit)
 
 	if (c < 0x20 || c == 0x7F) return;
 	self.src.text.append_char32(c);
+}
+
+<*
+ The cursor's movement over the last `getEvent`, differenced against the
+ previous one.
+
+ In the same points `getMousePos` answers in, with the same bottom-up origin —
+ so `[1]` is positive UPWARD here, where the darwin backend reports AppKit's
+ downward `deltaY`. `scene/input.c3` turns either into image pixels.
+
+ A difference rather than raw input. `WM_INPUT` and `RegisterRawInputDevices`
+ are the better source and would keep reporting past the edge of the screen on
+ their own; the recentre below is what stands in for that, and it is enough
+ because a locked cursor never reaches an edge.
+*>
+fn float[<2>] Window.getMouseDelta(&self) => self.src.mouse_delta;
+
+fn void Window.track_mouse_delta(&self) @local
+{
+	float[<2>] at = self.getMousePos();
+	self.src.mouse_delta = self.src.has_last
+		? (float[<2>]) { at.x - self.src.last_mouse.x, at.y - self.src.last_mouse.y }
+		: (float[<2>]) { 0, 0 };
+	self.src.last_mouse = at;
+	self.src.has_last = true;
+}
+
+<*
+ Take the cursor out of the user's hands, or give it back.
+
+ Three things, and each covers a different half of what a lock has to be.
+ `ShowCursor` makes it invisible; `ClipCursor` confines it to this window's
+ client area so a click cannot land on another application; and
+ `keep_pointer_centred` stops it resting against the clip rectangle, where the
+ position stops changing and the differenced delta would go to nought — which
+ is the failure a lock exists to remove, arriving through the clip that was
+ meant to help.
+
+ **`ShowCursor` is counted, exactly as `[NSCursor hide]` is on darwin.** Two
+ hides need two shows, so this is guarded by the flag and is a no-op when it
+ would be a repeat.
+
+ **Untested.** No window from this backend has been on screen since any of the
+ mouse work — `plan.md` §1 — so this is written to the documented behaviour of
+ four calls and has never been watched.
+*>
+fn void Window.setPointerLock(&self, bool locked)
+{
+	if (locked == self.src.pointer_locked) return;
+	self.src.pointer_locked = locked;
+
+	if (!locked)
+	{
+		clipCursor(null);
+		showCursor(true);
+		return;
+	}
+
+	showCursor(false);
+	self.clip_to_client();
+	self.keep_pointer_centred(force: true);
+}
+
+fn bool Window.pointerLocked(&self) => self.src.pointer_locked;
+
+// The client area in screen coordinates, which is what ClipCursor takes.
+fn void Window.clip_to_client(&self) @local
+{
+	Rect client;
+	if (!getClientRect(self.src.hwnd, &client)) return;
+
+	Point top_left = { client.left, client.top };
+	Point bottom_right = { client.right, client.bottom };
+	if (!clientToScreen(self.src.hwnd, &top_left)) return;
+	if (!clientToScreen(self.src.hwnd, &bottom_right)) return;
+
+	Rect screen = { top_left.x, top_left.y, bottom_right.x, bottom_right.y };
+	clipCursor(&screen);
+}
+
+<*
+ Put the cursor back in the middle of the client area, if it has strayed far
+ enough to be worth doing.
+
+ The same rule the darwin backend follows and for the same reason: a warp is a
+ round trip and perturbs the event stream, and the cursor only has to stay away
+ from the edges. Left alone in the middle half, snapped back when it leaves.
+*>
+fn void Window.keep_pointer_centred(&self, bool force = false) @local
+{
+	if (!self.src.pointer_locked) return;
+
+	Rect client;
+	if (!getClientRect(self.src.hwnd, &client)) return;
+	int width = client.right - client.left;
+	int height = client.bottom - client.top;
+	if (width <= 0 || height <= 0) return;
+
+	Point at;
+	if (!getCursorPos(&at)) return;
+	Point local = at;
+	if (!screenToClient(self.src.hwnd, &local)) return;
+
+	if (!force)
+	{
+		int margin_x = width / 4;
+		int margin_y = height / 4;
+		bool inside = local.x > margin_x && local.x < width - margin_x
+			&& local.y > margin_y && local.y < height - margin_y;
+		if (inside) return;
+	}
+
+	Point centre = { width / 2, height / 2 };
+	if (!clientToScreen(self.src.hwnd, &centre)) return;
+	setCursorPos(centre.x, centre.y);
+	// The tracker's last reading is now wrong by the whole warp, and the next
+	// difference would report it as a hand movement across the window. Dropped
+	// rather than corrected: one frame with no delta at the moment the cursor
+	// is recentred is invisible, and a corrected one is a second place for the
+	// two coordinate systems to disagree.
+	self.src.has_last = false;
 }

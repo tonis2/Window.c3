@@ -307,6 +307,24 @@ fn int NSEvent.get_key(self) => objc::msg_send(self, GetInt, "keyCode");
 fn int NSEvent.get_scroll(self) => objc::msg_send(self, GetInt, "scrollingDeltaY");
 fn double NSEvent.get_delta(self) => objc::msg_send(self, GetDouble, "deltaY");
 
+<*
+ The mouse's own movement for this event, in points, independent of where the
+ cursor ended up.
+
+ **This is what pointer lock is made of.** `mouseLocationOutsideOfEventStream`
+ stops moving the moment the cursor reaches the edge of the screen, and it stops
+ moving entirely once the cursor is decoupled from the mouse — so a look built
+ by differencing positions ends at the screen's edge, which is the whole problem
+ a lock exists to solve. `deltaX`/`deltaY` are the hardware's report and keep
+ arriving.
+
+ Positive x is right; positive y is DOWN, which is AppKit's convention for these
+ two fields and the opposite of `locationInWindow`'s. `Window.getMouseDelta`
+ hands them on unchanged and `scene/input.c3` is where the flip happens.
+*>
+fn double NSEvent.get_delta_x(self) => objc::msg_send(self, GetDouble, "deltaX");
+fn double NSEvent.get_delta_y(self) => objc::msg_send(self, GetDouble, "deltaY");
+
 fn NSString NSEvent.get_characters(self) => objc::msg_send(self, GetCharacters, "characters");
 fn int NSEvent.get_modifierFlags(self) => objc::msg_send(self, GetInt, "modifierFlags");
 
