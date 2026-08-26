@@ -218,7 +218,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
  that is where the cursor stops. See `setPointerLock` for the half that is
  missing and what it would take.
 *>
-fn void Window.track_mouse_delta(&self) @local
+fn void Window.track_mouse_delta(&self)
 {
 	float[<2>] at = self.getMousePos();
 	self.src.mouse_delta = self.src.has_last ? (float[<2>]) { at.x - self.src.last_mouse.x, at.y - self.src.last_mouse.y } : (float[<2>]) { 0, 0 };

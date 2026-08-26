@@ -904,7 +904,7 @@ fn void Window.append_typed(&self, Char16 unit)
 *>
 fn float[<2>] Window.getMouseDelta(&self) => self.src.mouse_delta;
 
-fn void Window.track_mouse_delta(&self) @local
+fn void Window.track_mouse_delta(&self)
 {
 	float[<2>] at = self.getMousePos();
 	self.src.mouse_delta = self.src.has_last
@@ -953,7 +953,7 @@ fn void Window.setPointerLock(&self, bool locked)
 fn bool Window.pointerLocked(&self) => self.src.pointer_locked;
 
 // The client area in screen coordinates, which is what ClipCursor takes.
-fn void Window.clip_to_client(&self) @local
+fn void Window.clip_to_client(&self)
 {
 	Rect client;
 	if (!getClientRect(self.src.hwnd, &client)) return;
@@ -975,7 +975,7 @@ fn void Window.clip_to_client(&self) @local
  round trip and perturbs the event stream, and the cursor only has to stay away
  from the edges. Left alone in the middle half, snapped back when it leaves.
 *>
-fn void Window.keep_pointer_centred(&self, bool force = false) @local
+fn void Window.keep_pointer_centred(&self, bool force = false)
 {
 	if (!self.src.pointer_locked) return;
 
