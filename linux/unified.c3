@@ -170,20 +170,24 @@ fn float[<2>] Window.getMousePos(self)
 <*
  Make a waiting `getEvent` return, from any thread.
 
- **Not implemented on either Linux backend yet — this returns without doing
- anything**, so a worker thread with work for the main thread must wait for
- the user to move the mouse. Callers that need the wake to be real should
- treat Linux as "polling only" until this grows teeth.
+ Both backends block when `getEvent(wait: true)` parks them, and both need a
+ second thing to wait on or a worker with work for the main thread waits for
+ the user to move the mouse. X11 blocks in `xcb_wait_for_event` and is woken by
+ a ClientMessage sent to the window's own id; Wayland blocks in `poll` on the
+ display fd and is woken by a byte down a pipe in the same poll set. Neither
+ touches anything the main thread owns — see `x11_wake` and `wayland_wake`.
 
- What each backend needs: X11 blocks in `xcb_wait_for_event`, so the wake is
- an `xcb_send_event` of a ClientMessage to the window's own id with an event
- mask of zero — xcb is thread-safe for sending, and `x11_pollEvents` already
- ignores message types it does not know. Wayland blocks in `poll` on the
- display fd, so the wake is a byte down a pipe whose read end joins that poll
- set, with `wl_display_cancel_read` on the wake-only path.
+ Delivering a wake nobody was waiting for is harmless: X11 queues an event the
+ handler skips, and Wayland leaves a byte the next poll drains.
 *>
 fn void Window.wake(&self)
 {
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_wake((WaylandWindow*)self.src.backend_data);
+		case X11:     x11_wake((X11Window*)self.src.backend_data);
+		default:      break;
+	}
 }
 
 // Get events. When wait is set (an on-demand render loop asking to idle), the
@@ -206,24 +210,109 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 			map = self.src.event_map;
 	}
 
+	// Both backends learn their size from an event, so this is the first moment
+	// after one arrives that anything could be told. `Window.width` used to be
+	// whatever `new` was asked for and stayed that way for the life of the
+	// process, which made every reader of it wrong the first time an edge moved.
+	self.refresh_size();
 	self.track_mouse_delta();
 	return map;
 }
 
 <*
- Difference the cursor's position against the previous `getEvent`.
+ Copy the backend's current size up onto the `Window`.
 
- The whole of what `getMouseDelta` reports on Linux, and it is the weaker half
- of the two things a delta can be: it stops at the edge of the screen, because
- that is where the cursor stops. See `setPointerLock` for the half that is
- missing and what it would take.
+ Called once per `getEvent`, from a latch rather than by asking the display, so
+ a frame loop reading `Window.width` pays nothing for it. `getMousePos` is the
+ reason it has to be current rather than merely available: the y flip is against
+ this height, so a stale one puts the cursor in the wrong place by exactly the
+ amount the window was resized by.
+*>
+fn void Window.refresh_size(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND:
+			int[<2>] at = wayland_get_size((WaylandWindow*)self.src.backend_data);
+			if (at.x > 0) self.width = (float)at.x;
+			if (at.y > 0) self.height = (float)at.y;
+		case X11:
+			uint[<2>] at = x11_get_size((X11Window*)self.src.backend_data);
+			if (at.x > 0) self.width = (float)at.x;
+			if (at.y > 0) self.height = (float)at.y;
+		default:
+			break;
+	}
+	self.src.width = self.width;
+	self.src.height = self.height;
+}
+
+<*
+ What the mouse did since the previous `getEvent`.
+
+ Two mechanisms, and which one runs is whether the pointer is locked.
+
+ **Unlocked** it is a difference of cursor positions, and that is the weaker of
+ the two things a delta can be: it stops at the edge of the screen, because that
+ is where the cursor stops.
+
+ **Locked** it is the hand, and the two backends get there differently. X11 has
+ no relative pointer, so the cursor is warped back to the middle after every
+ reading and the movement is how far it got from there. Wayland cannot warp at
+ all and does not need to — `zwp_relative_pointer_v1` reports the hand directly,
+ with the cursor held still by the lock beside it.
+
+ Both are converted to the bottom-left origin `getMousePos` answers in, so the
+ sign of `[1]` means one thing whichever path produced it.
 *>
 fn void Window.track_mouse_delta(&self)
 {
+	if (self.pointerLocked())
+	{
+		self.src.mouse_delta = self.locked_delta();
+		// The cursor is not where the hand is any more, so a difference against
+		// this reading would be a lie the moment the lock ends. Seeding it with
+		// where the cursor actually sits makes the first unlocked frame report
+		// nothing rather than the whole of the lock's travel.
+		self.src.last_mouse = self.getMousePos();
+		self.src.has_last = true;
+		return;
+	}
+
 	float[<2>] at = self.getMousePos();
 	self.src.mouse_delta = self.src.has_last ? (float[<2>]) { at.x - self.src.last_mouse.x, at.y - self.src.last_mouse.y } : (float[<2>]) { 0, 0 };
 	self.src.last_mouse = at;
 	self.src.has_last = true;
+}
+
+<*
+ The hand's movement while the pointer is locked, per backend.
+
+ X11 reads where the cursor got to and puts it back in the middle; Wayland reads
+ what the compositor already accumulated. Both answer in the bottom-left origin
+ the rest of this file uses, which for X11 falls out of `getMousePos` and for
+ Wayland is the one negation below.
+*>
+fn float[<2>] Window.locked_delta(&self)
+{
+	switch (self.src.backend)
+	{
+		case X11:
+			X11Window* x11 = (X11Window*)self.src.backend_data;
+			float[<2>] at = self.getMousePos();
+			float[<2>] centre = { self.width / 2, self.height / 2 };
+			x11_warp_to_centre(x11);
+			return { at.x - centre.x, at.y - centre.y };
+		case WAYLAND:
+			// Surface-local, so +y is down where everything this returns to counts
+			// it up. The same flip `getMousePos` does, on a movement rather than a
+			// position — which is why it is a negation and not a subtraction from
+			// the height.
+			double[<2>] moved = wayland_relative_motion((WaylandWindow*)self.src.backend_data);
+			return { (float)moved.x, (float)-moved.y };
+		default:
+			return { 0, 0 };
+	}
 }
 
 <*
@@ -235,35 +324,50 @@ fn void Window.track_mouse_delta(&self)
 fn float[<2>] Window.getMouseDelta(&self) => self.src.mouse_delta;
 
 <*
- Pointer lock — **not implemented on either Linux backend**, and this reports
- that rather than pretending.
+ Take the pointer out of the user's hands, or give it back.
 
- `pointerLocked` goes on answering false after a call to this, so a script can
- find out that the platform did not take it and fall back to a drag-look. The
- alternative — recording the flag and answering true — would leave a game whose
- look silently stops at the edge of the screen, which is the exact failure a
- lock exists to remove and reads as the mouse being broken.
+ What it buys is a look that does not stop. Unlocked, `getMouseDelta` is a
+ difference of cursor positions and a cursor stops at the edge of the screen
+ while a hand does not; locked, the movement keeps counting.
 
- What each backend needs, both of which are window-library work rather than
- anything this file can do:
+ Both Linux backends implement it now, and they are not the same mechanism:
 
- - **X11**: `XDefineCursor` with a 1x1 transparent pixmap to hide it, and
-   `XWarpPointer` back to the window's centre on every frame the cursor
-   strays — the same recentre the darwin backend does, and simpler there
-   because X11 has no local-event suppression to defeat.
- - **Wayland**: the `zwp_pointer_constraints_v1` protocol —
-   `lock_pointer` plus `zwp_relative_pointer_v1` for the deltas. There is no
-   warp on Wayland by design; a client cannot move the cursor at all, so this
-   is not an X11 shortcut away, it is a protocol binding this repository does
-   not have. `linux/xdg_shell.c3` is the shape a second one would take.
+ - **X11** hides the cursor with a 1x1 transparent pixmap and warps it back to
+   the window's centre after every reading, which is the same recentre the
+   darwin backend does.
+ - **Wayland** cannot warp a cursor at all — a client moving the pointer is
+   outside what the protocol allows — so it asks the compositor to hold the
+   cursor still with `zwp_pointer_constraints_v1` and to report the hand
+   separately with `zwp_relative_pointer_v1`. Both are optional globals, so a
+   compositor without them is a session with no lock.
 
- `plan.md` §1 is where this belongs on the list: neither backend has had a
- window on screen since any of the mouse work, so this would be written blind
- and could not be checked.
+ **`pointerLocked` is what happened, not what was asked for**, and that has not
+ changed from when neither backend could do this. A Wayland compositor refuses a
+ lock on a surface that is not focused and can take one back at any time; X11
+ has no cursor to hide if the pixmap could not be made. A script that needs a
+ look reads the value back and falls back to a drag-look when it comes back
+ false, and recording the request instead would leave a game whose look silently
+ stops at the edge of the screen.
 *>
-fn void Window.setPointerLock(&self, bool locked) { }
+fn void Window.setPointerLock(&self, bool locked)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_pointer_lock((WaylandWindow*)self.src.backend_data, locked);
+		case X11:     x11_set_pointer_lock((X11Window*)self.src.backend_data, locked);
+		default:      break;
+	}
+}
 
-fn bool Window.pointerLocked(&self) => false;
+fn bool Window.pointerLocked(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_pointer_locked((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_pointer_locked((X11Window*)self.src.backend_data);
+		default:      return false;
+	}
+}
 
 <*
  The key and button transitions the last `getEvent` drained, in order.
@@ -474,13 +578,17 @@ fn void Window.set_cursor(&self, CursorShape shape)
 }
 
 <*
- Resize the window.
+ Resize the window, in logical units.
 
  The two backends mean quite different things by it. X11 configures the window
- directly and the window manager may adjust the request. Wayland cannot ask at
- all — it constrains its own geometry and the compositor answers with a
- configure. Either way the size that arrives back is the one that counts, so
- nothing is recorded here.
+ and the window manager may adjust or refuse the request; the ConfigureNotify
+ that follows is what settled. Wayland has no such request at all — a client's
+ size *is* the buffer it commits, so the size is recorded on the spot, whoever
+ draws is expected to build at it, and the configure that answers the commit
+ either agrees or corrects it.
+
+ Either way `Window.width` on the next `getEvent` is what actually happened, and
+ on neither backend is it necessarily what was asked for.
 *>
 fn void Window.set_size(&self, int width, int height)
 {

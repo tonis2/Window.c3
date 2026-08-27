@@ -26,6 +26,24 @@ struct X11Window
 	double scroll_delta_x;  // the horizontal half (+ = right)
 	DString text;           // text typed during the last poll
 	uint current_cursor;    // active X cursor resource (0 = none created yet)
+	// The size the last ConfigureNotify settled on. The window manager is free
+	// to adjust or refuse what `x11_set_size` asked for, so this is the only
+	// number that is true — `Params` is a request and goes stale the first time
+	// anybody drags an edge.
+	uint width;
+	uint height;
+	// `_C3W_WAKE`, the ClientMessage type `x11_wake` sends to this window. Its
+	// own atom rather than a reused one so the handler can tell a wake from a
+	// WM_DELETE_WINDOW without reading further into the message.
+	uint wake_atom;
+	// Pointer lock. `blank_cursor` is a 1x1 transparent cursor made on the first
+	// lock and kept for the window's life — creating one per call would churn a
+	// server resource sixty times a second. `shape_cursor` is what
+	// `x11_set_cursor` was last asked for, so unlocking puts back the shape the
+	// caller believes is showing rather than the arrow.
+	bool pointer_locked;
+	ulong blank_cursor;
+	CursorShape shape_cursor;
 	XkbContext xkb_context; // libxkbcommon objects for layout-aware text input
 	XkbKeymap xkb_keymap;   // (null when libxkbcommon-x11 is unavailable)
 	XkbState xkb_state;
@@ -54,6 +72,17 @@ alias FnXcbConfigureWindow = fn uint(Connection, XCB_Window, ushort, void*);
 // client message sent to the root window, and XIconifyWindow is that, already
 // written. The display is open either way — xcb_connect rides on it.
 alias FnXIconifyWindow = fn int(X11Display, ulong window, int screen);
+// xcb_send_event(c, propagate, destination, event_mask, event). The event is a
+// 32-byte buffer whatever its type — the protocol pads every event to that.
+alias FnXcbSendEvent = fn uint(Connection, char propagate, XCB_Window destination, uint event_mask, char* event);
+// Xlib for the pointer-lock pieces: xcb has no equivalent of
+// XCreateBitmapFromData, and the warp wants the display anyway.
+alias FnXCreateBitmapFromData = fn ulong(X11Display, ulong drawable, char* data, uint width, uint height);
+alias FnXCreatePixmapCursor = fn ulong(X11Display, ulong source, ulong mask, XColor* fg, XColor* bg, uint x, uint y);
+alias FnXFreePixmap = fn int(X11Display, ulong pixmap);
+alias FnXWarpPointer = fn int(
+	X11Display, ulong src, ulong dest, int src_x, int src_y, uint src_w, uint src_h, int dest_x, int dest_y
+);
 alias FnXcbQueryPointer = fn uint(Connection, XCB_Window);
 alias FnXcbQueryPointerReply = fn KeyPressEvent*(Connection, uint, void*);
 alias FnXcbDestroyWindow = fn uint(Connection, XCB_Window);
@@ -99,6 +128,38 @@ struct ClientMessageEvent
 	uint data0;
 }
 
+// xcb_configure_notify_event_t. The window manager sends one for every geometry
+// change it settles, including the ones it made up in answer to a request.
+struct ConfigureNotifyEvent
+{
+	char response_type;
+	char pad0;
+	short sequence;
+	uint event;
+	uint window;
+	uint above_sibling;
+	short x;
+	short y;
+	ushort width;
+	ushort height;
+	ushort border_width;
+	char override_redirect;
+	char pad1;
+}
+
+// XColor. Both colours of a 1x1 transparent cursor are unused — the pixmap has
+// no set bits — but XCreatePixmapCursor dereferences them, so they are passed
+// as zeroed structs rather than null.
+struct XColor
+{
+	ulong pixel;
+	ushort red;
+	ushort green;
+	ushort blue;
+	char flags;
+	char pad;
+}
+
 // xcb_query_pointer_reply_t. root_x/root_y are screen-relative; win_x/win_y are
 // relative to the queried window (what hit-testing needs).
 struct QueryPointerReply
@@ -135,6 +196,11 @@ FnXcbWaitForEvent xcbWaitForEvent;
 FnXcbChangeProperty xcbChangeProperty;
 FnXcbConfigureWindow xcbConfigureWindow;
 FnXIconifyWindow xIconifyWindow;
+FnXcbSendEvent xcbSendEvent;
+FnXCreateBitmapFromData xCreateBitmapFromData;
+FnXCreatePixmapCursor xCreatePixmapCursor;
+FnXFreePixmap xFreePixmap;
+FnXWarpPointer xWarpPointer;
 FnXcbQueryPointer xcbQueryPointer;
 FnXcbQueryPointerReply xcbQueryPointerReply;
 FnXcbDestroyWindow xcbDestroy;
@@ -180,6 +246,11 @@ fn bool x11_load()
 	xcbChangeProperty = (FnXcbChangeProperty)dlsym(_xcb_lib, "xcb_change_property");
 	xcbConfigureWindow = (FnXcbConfigureWindow)dlsym(_xcb_lib, "xcb_configure_window");
 	xIconifyWindow = (FnXIconifyWindow)dlsym(_x11_lib, "XIconifyWindow");
+	xcbSendEvent = (FnXcbSendEvent)dlsym(_xcb_lib, "xcb_send_event");
+	xCreateBitmapFromData = (FnXCreateBitmapFromData)dlsym(_x11_lib, "XCreateBitmapFromData");
+	xCreatePixmapCursor = (FnXCreatePixmapCursor)dlsym(_x11_lib, "XCreatePixmapCursor");
+	xFreePixmap = (FnXFreePixmap)dlsym(_x11_lib, "XFreePixmap");
+	xWarpPointer = (FnXWarpPointer)dlsym(_x11_lib, "XWarpPointer");
 	xcbQueryPointer = (FnXcbQueryPointer)dlsym(_xcb_lib, "xcb_query_pointer");
 	xcbQueryPointerReply = (FnXcbQueryPointerReply)dlsym(_xcb_lib, "xcb_query_pointer_reply");
 	xcbDestroy = (FnXcbDestroyWindow)dlsym(_xcb_lib, "xcb_destroy_window");
@@ -306,6 +377,9 @@ fn X11Window? x11_create(Params params, String name)
 			| XcbEventMask.EVENT_MASK_BUTTON_PRESS.value
 			| XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value
 			| XcbEventMask.EVENT_MASK_POINTER_MOTION.value
+			// ConfigureNotify, and the whole of how this backend learns its own
+			// size. Without it the window is however big `Params` said forever.
+			| XcbEventMask.EVENT_MASK_STRUCTURE_NOTIFY.value
 	};
 
 	uint cookie = createWindow(
@@ -337,6 +411,9 @@ fn X11Window? x11_create(Params params, String name)
 	// (4), format = 32, one 32-bit atom.
 	uint wm_protocols     = x11_intern_atom(connection, "WM_PROTOCOLS");
 	uint wm_delete_window = x11_intern_atom(connection, "WM_DELETE_WINDOW");
+	// Not a protocol anybody else knows: this is only ever sent by this process
+	// to this window, to break a `xcb_wait_for_event` that is parked.
+	uint wake_atom        = x11_intern_atom(connection, "_C3W_WAKE");
 	xcbChangeProperty(connection, XcbProp.PROP_MODE_REPLACE, window, wm_protocols, 4, 32, 1, (char*)&wm_delete_window);
 	xcbFlush(connection);
 
@@ -348,6 +425,13 @@ fn X11Window? x11_create(Params params, String name)
 		.display_height = screen_iterator.data.height_in_pixels,
 		.initialized = true,
 		.wm_delete_window = wm_delete_window,
+		.wake_atom = wake_atom,
+		// What was asked for, until the first ConfigureNotify says otherwise.
+		// The server sends one when the window is mapped, so this is the answer
+		// for a handful of milliseconds at most.
+		.width = (uint)params.width,
+		.height = (uint)params.height,
+		.shape_cursor = CursorShape.ARROW,
 		.text = dstring::new(mem),
 	};
 
@@ -484,9 +568,24 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 			x11_handleButton(self, (uint)event.value, true);
 		case 5: // ButtonRelease
 			x11_handleButton(self, (uint)event.value, false);
+		case 22: // ConfigureNotify
+			{
+				ConfigureNotifyEvent* moved = (ConfigureNotifyEvent*)event;
+				// The window manager reparents, so a ConfigureNotify for the frame
+				// arrives here too; only this window's own geometry is ours.
+				if (moved.window == (uint)(uptr)self.window)
+				{
+					self.width = (uint)moved.width;
+					self.height = (uint)moved.height;
+				}
+			}
 		case 33: // ClientMessage
 			{
 				ClientMessageEvent* msg = (ClientMessageEvent*)event;
+				// A wake carries no information beyond having arrived — it exists to
+				// make a parked `xcb_wait_for_event` return, and the caller's own
+				// work is what happens next.
+				if (self.wake_atom != 0 && msg.type == self.wake_atom) break;
 				if (self.wm_delete_window != 0 && msg.data0 == self.wm_delete_window)
 				{
 					self.close_requested = true;
@@ -532,6 +631,46 @@ fn void x11_handleButton(X11Window* self, uint button, bool pressed) @private
 		default:
 			break;
 	}
+}
+
+<*
+ The size the last ConfigureNotify settled on, in pixels.
+
+ Answered from a latch rather than by asking the server, because the caller is
+ the frame loop and a round trip per frame to learn a number that changes when
+ somebody drags an edge is a poor trade. The latch is exact: X11 sends a
+ ConfigureNotify for every geometry change, including the ones nobody asked for.
+*>
+fn uint[<2>] x11_get_size(X11Window* self) => { self.width, self.height };
+
+<*
+ Break a `xcb_wait_for_event` that is parked, from any thread.
+
+ A ClientMessage sent to our own window with an event mask of zero, which is
+ delivered to the window's own event queue and nowhere else. Legal from a
+ foreign thread: xcb serialises writes on the connection, and this writes and
+ flushes and touches nothing else on the window.
+
+ The mask is deliberately zero rather than STRUCTURE_NOTIFY: a zero mask means
+ "deliver to the destination itself", where a real mask would also hand it to
+ anybody selecting for that event on the window, which for a reparented window
+ is the window manager.
+*>
+fn void x11_wake(X11Window* self)
+{
+	if (self.connection == null || xcbSendEvent == null || self.wake_atom == 0) return;
+
+	// Every X event is 32 bytes on the wire whatever it holds, and the tail of
+	// this one is the ClientMessage's 20 data bytes, which say nothing.
+	char[32] message;
+	ClientMessageEvent* wake = (ClientMessageEvent*)&message;
+	wake.response_type = 33; // ClientMessage
+	wake.format = 32;
+	wake.window = (uint)(uptr)self.window;
+	wake.type = self.wake_atom;
+
+	xcbSendEvent(self.connection, 0, self.window, 0, &message);
+	xcbFlush(self.connection);
 }
 
 fn float x11_get_scroll(X11Window* self) => (float)self.scroll_delta;
@@ -622,6 +761,15 @@ fn void x11_set_minimized(X11Window* self, bool minimized)
 
 fn void x11_set_cursor(X11Window* self, CursorShape shape)
 {
+	// Remembered whatever happens next, so unlocking the pointer can put back the
+	// shape the caller believes is showing.
+	self.shape_cursor = shape;
+	// A locked pointer is a hidden one, and the frame loop goes on asking for
+	// shapes underneath the lock — a hover over something clickable still wants
+	// a hand. Installing one here would make the cursor reappear in the middle
+	// of a mouse look.
+	if (self.pointer_locked) return;
+
 	if (self.display == null || xCreateFontCursor == null) return;
 
 	ulong cursor = xCreateFontCursor(self.display, x11_cursor_font(shape));
@@ -633,9 +781,99 @@ fn void x11_set_cursor(X11Window* self, CursorShape shape)
 	self.current_cursor = (uint)cursor;
 }
 
+<*
+ A 1x1 transparent cursor, made once and kept.
+
+ The way to hide a pointer in the core protocol: a cursor whose source bitmap
+ has no bit set draws nothing, and X has no "no cursor" to define instead. Made
+ lazily because a window that never locks should not pay for a server resource,
+ and kept afterwards because a lock that made one per call would churn one
+ sixty times a second.
+
+ @return `Zero when the X symbols for it are missing, which is a lock that cannot be given.`
+*>
+fn ulong x11_blank_cursor(X11Window* self) @private
+{
+	if (self.blank_cursor != 0) return self.blank_cursor;
+	if (self.display == null || xCreateBitmapFromData == null || xCreatePixmapCursor == null) return 0;
+
+	char[1] nothing = { 0 };
+	ulong pixmap = xCreateBitmapFromData(self.display, (ulong)(uptr)self.window, &nothing[0], 1, 1);
+	if (pixmap == 0) return 0;
+
+	// Source and mask are the same empty bitmap, so no pixel of the cursor is
+	// drawn and neither colour is ever read. They are passed as zeroed structs
+	// rather than null because XCreatePixmapCursor dereferences both.
+	XColor unused;
+	self.blank_cursor = xCreatePixmapCursor(self.display, pixmap, pixmap, &unused, &unused, 0, 0);
+	if (xFreePixmap != null) xFreePixmap(self.display, pixmap);
+	return self.blank_cursor;
+}
+
+<*
+ Take the pointer, or give it back.
+
+ Hiding it is a cursor; keeping it is `x11_warp_to_centre`, called once per poll
+ from `Window.track_mouse_delta`. There is no grab: a grab would also take the
+ keyboard focus question and every click on the desktop with it, and re-centring
+ every frame already means the cursor never travels far enough to leave.
+
+ **Nothing is latched on failure.** If the cursor cannot be made, this stays
+ unlocked and `x11_pointer_locked` goes on answering false — which is the signal
+ a script branches on to fall back to a drag-look, and a flag recorded here
+ would have turned that into a look that silently stops at the edge of a screen.
+*>
+fn void x11_set_pointer_lock(X11Window* self, bool locked)
+{
+	if (locked == self.pointer_locked) return;
+
+	if (!locked)
+	{
+		self.pointer_locked = false;
+		x11_set_cursor(self, self.shape_cursor);
+		return;
+	}
+
+	if (xDefineCursor == null) return;
+	ulong blank = x11_blank_cursor(self);
+	if (blank == 0) return;
+
+	xDefineCursor(self.display, (ulong)(uptr)self.window, blank);
+	xFlush(self.display);
+	self.pointer_locked = true;
+	x11_warp_to_centre(self);
+}
+
+fn bool x11_pointer_locked(X11Window* self) => self.pointer_locked;
+
+<*
+ Put the cursor back in the middle of the window.
+
+ What makes the movement a hand's rather than a cursor's: the reading before
+ this one is how far it got from the centre, and returning it there means the
+ next reading measures from the same place again. Without it the cursor walks to
+ an edge of the screen and the look stops turning, which is the whole failure a
+ lock exists to remove.
+
+ A no-op unless locked, so the frame loop can call it unconditionally.
+*>
+fn void x11_warp_to_centre(X11Window* self)
+{
+	if (!self.pointer_locked || xWarpPointer == null) return;
+	if (self.width == 0 || self.height == 0) return;
+
+	// src = None: warp from wherever the pointer is, rather than only when it is
+	// inside some source rectangle.
+	xWarpPointer(
+		self.display, 0, (ulong)(uptr)self.window, 0, 0, 0, 0, (int)(self.width / 2), (int)(self.height / 2)
+	);
+	xFlush(self.display);
+}
+
 // Free and destroys window instance
 fn void x11_free(X11Window* self)
 {
+	if (self.blank_cursor != 0 && xFreeCursor != null) xFreeCursor(self.display, self.blank_cursor);
 	self.text.free();
 	xkb_free(self.xkb_context, self.xkb_keymap, self.xkb_state);
 	xcbDestroy(self.connection, self.window);

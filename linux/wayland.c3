@@ -77,6 +77,30 @@ struct WaylandWindow
 	int output_count;
 	Proxy decoration_manager; // zxdg_decoration_manager_v1, if the compositor has it
 	Proxy toplevel_decoration; // this window's decoration object (server-side titlebar)
+
+	// The size the last xdg_toplevel.configure settled on, in logical units. A
+	// Wayland client does not choose its own size — it asks, and the compositor
+	// answers with this — so it is the only number that is true, and `Params` is
+	// stale the moment anything resizes.
+	int width;
+	int height;
+
+	// The read and write ends of the pipe `wayland_wake` writes a byte down.
+	// Wayland blocks in `poll` on the display fd, so the only way to make a
+	// parked poll return from another thread is to give it a second fd.
+	int wake_read;
+	int wake_write;
+
+	// pointer-constraints-v1 and relative-pointer-v1: the two halves of a
+	// pointer lock. `locked_pointer` is what holds the cursor still and
+	// `relative_pointer` is what still reports movement while it does — a lock
+	// without the second is a mouse that stops rather than a look that works.
+	Proxy pointer_constraints; // zwp_pointer_constraints_v1, if the compositor has it
+	Proxy relative_pointer_manager; // zwp_relative_pointer_manager_v1, likewise
+	Proxy locked_pointer; // this window's lock, while it has one
+	Proxy relative_pointer; // the deltas that come with it
+	bool pointer_locked; // what the compositor confirmed, not what was asked for
+	double[<2>] relative_motion; // accumulated over the last poll, in logical units
 }
 
 struct WLArray
@@ -198,6 +222,15 @@ struct PollFd
 const short POLLIN = 1;
 extern fn int poll(PollFd* fds, uint nfds, int timeout) @cname("poll");
 
+// The wake pipe. Non-blocking on both ends so neither a wake with a full pipe
+// nor a drain of an empty one can park a thread, and close-on-exec because a
+// child process has no business holding either end.
+const int O_NONBLOCK = 0o4000;
+const int O_CLOEXEC  = 0o2000000;
+extern fn int pipe2(int* fds, int flags) @cname("pipe2");
+extern fn sz read_fd(int fd, void* buf, usz count) @cname("read");
+extern fn sz write_fd(int fd, void* buf, usz count) @cname("write");
+
 // Function pointers loaded at runtime via dlsym
 FnWlDisplayConnect connect;
 FnWlDisplayDisconnect disconnect;
@@ -293,6 +326,17 @@ fn bool wayland_load()
 	// cursor-shape-v1: fill the wl_pointer type slot for get_pointer.
 	cursor_shape_get_pointer[1] = wl_pointer_interface;
 
+	// pointer-constraints-v1: lock_pointer(id, surface, pointer, region, lifetime).
+	// The region is wl_region and stays null — nothing here passes one, and the
+	// slot is only read when an argument is actually sent.
+	constraints_lock_pointer[1] = wl_surface_interface;
+	constraints_lock_pointer[2] = wl_pointer_interface;
+	constraints_confine_pointer[1] = wl_surface_interface;
+	constraints_confine_pointer[2] = wl_pointer_interface;
+
+	// relative-pointer-v1: get_relative_pointer(id, pointer).
+	relative_get_pointer[1] = wl_pointer_interface;
+
 	return true;
 }
 
@@ -342,8 +386,18 @@ fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
 	data.close_requested = true;
 }
 
+<*
+ The compositor's answer about how big this window is.
+
+ The whole of how a Wayland client learns its own size: there is no equivalent
+ of asking, and `Params` was only ever a request. A zero on either axis means
+ "you choose", which arrives before the first real configure and whenever the
+ compositor has no opinion, and is not a size to record.
+*>
 fn void topSurfaceConfigure(WaylandWindow* data, XDG_top_level top_level, int width, int height, void* states)
 {
+	if (width > 0) data.width = width;
+	if (height > 0) data.height = height;
 }
 fn void topSurfaceBounds(WaylandWindow* data, XDG_top_level top_level, int width, int height)
 {
@@ -577,6 +631,16 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 		window.decoration_manager = registry_bind(registry, &zxdg_decoration_manager_v1_interface, name, 1);
 	}
 
+	if (action_name == "zwp_pointer_constraints_v1")
+	{
+		window.pointer_constraints = registry_bind(registry, &zwp_pointer_constraints_v1_interface, name, 1);
+	}
+
+	if (action_name == "zwp_relative_pointer_manager_v1")
+	{
+		window.relative_pointer_manager = registry_bind(registry, &zwp_relative_pointer_manager_v1_interface, name, 1);
+	}
+
 	if (action_name == "wl_output")
 	{
 		// The scale event needs v2; cap at v4, the newest revision the
@@ -642,6 +706,25 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	window.display = display;
 	window.text = dstring::new(mem);
 	window.buffer_scale = 1;
+	// What was asked for, until the first configure answers. Everything below
+	// commits a buffer at this size, so it is what the window actually is for
+	// the roundtrip or two it takes.
+	window.width = params.width;
+	window.height = params.height;
+
+	// Both ends of the wake pipe, or neither: a wake that could half-exist would
+	// be a poll set with a fd nobody writes to.
+	int[2] wake_fds = { -1, -1 };
+	if (pipe2(&wake_fds[0], O_NONBLOCK | O_CLOEXEC) == 0)
+	{
+		window.wake_read = wake_fds[0];
+		window.wake_write = wake_fds[1];
+	}
+	else
+	{
+		window.wake_read = -1;
+		window.wake_write = -1;
+	}
 
 	Registry registry = get_registry(display);
 	if (registry == null) return FAILED_OPENING_WINDOW~;
@@ -890,6 +973,249 @@ Interface zxdg_toplevel_decoration_v1_interface = {
 	.events = &toplevel_decoration_events,
 };
 
+// --- pointer-constraints-v1 and relative-pointer-v1 (the pointer lock) ---
+//
+// Two protocols and both are needed. `lock_pointer` stops the cursor moving and
+// says nothing about where the hand went; `relative_pointer` reports the hand
+// and cannot hold the cursor still. Wayland has no warp — a client cannot move
+// the cursor at all, by design — so the X11 recentre trick is not available and
+// these are the whole mechanism.
+//
+// The `null` type slots are the wl_surface and wl_pointer arguments, patched in
+// `wayland_load` once dlsym has the real interfaces, exactly as cursor-shape's
+// get_pointer is.
+Interface*[*] constraints_lock_pointer = { &zwp_locked_pointer_v1_interface, null, null, null };
+Interface*[*] constraints_confine_pointer = { &zwp_confined_pointer_v1_interface, null, null, null };
+
+Message[*] pointer_constraints_methods = {
+	{ "destroy", "", null },
+	{ "lock_pointer", "noo?ou", &constraints_lock_pointer },
+	{ "confine_pointer", "noo?ou", &constraints_confine_pointer },
+};
+
+Interface zwp_pointer_constraints_v1_interface = {
+	.name = "zwp_pointer_constraints_v1",
+	.version = 1,
+	.method_count = pointer_constraints_methods.len,
+	.methods = &pointer_constraints_methods,
+	.event_count = 0,
+	.events = null,
+};
+
+Message[*] locked_pointer_methods = {
+	{ "destroy", "", null },
+	{ "set_cursor_position_hint", "ff", null },
+	{ "set_region", "?o", null },
+};
+
+// `locked` and `unlocked` are what the compositor actually decided, which is
+// why `pointer_locked` is written from the event rather than from the request:
+// a lock is refused whenever the surface is not focused, and reporting one that
+// was refused is the failure this backend spent its stub years avoiding.
+Message[*] locked_pointer_events = { { "locked", "", null }, { "unlocked", "", null }, };
+
+Interface zwp_locked_pointer_v1_interface = {
+	.name = "zwp_locked_pointer_v1",
+	.version = 1,
+	.method_count = locked_pointer_methods.len,
+	.methods = &locked_pointer_methods,
+	.event_count = locked_pointer_events.len,
+	.events = &locked_pointer_events,
+};
+
+// Bound for the type slot in `confine_pointer` and never created — the message
+// has to demarshal for the interface to be well formed, and nothing here
+// confines a pointer.
+Message[*] confined_pointer_methods = { { "destroy", "", null }, { "set_region", "?o", null }, };
+
+Message[*] confined_pointer_events = { { "confined", "", null }, { "unconfined", "", null }, };
+
+Interface zwp_confined_pointer_v1_interface = {
+	.name = "zwp_confined_pointer_v1",
+	.version = 1,
+	.method_count = confined_pointer_methods.len,
+	.methods = &confined_pointer_methods,
+	.event_count = confined_pointer_events.len,
+	.events = &confined_pointer_events,
+};
+
+Interface*[*] relative_get_pointer = { &zwp_relative_pointer_v1_interface, null };
+
+Message[*] relative_manager_methods = {
+	{ "destroy", "", null },
+	{ "get_relative_pointer", "no", &relative_get_pointer },
+};
+
+Interface zwp_relative_pointer_manager_v1_interface = {
+	.name = "zwp_relative_pointer_manager_v1",
+	.version = 1,
+	.method_count = relative_manager_methods.len,
+	.methods = &relative_manager_methods,
+	.event_count = 0,
+	.events = null,
+};
+
+Message[*] relative_pointer_methods = { { "destroy", "", null }, };
+
+// relative_motion(utime_hi, utime_lo, dx, dy, dx_unaccel, dy_unaccel) — six
+// arguments, four of them fixed-point. Both pairs are the same movement: the
+// first has the compositor's pointer acceleration applied, the second is raw.
+Message[*] relative_pointer_events = { { "relative_motion", "uuffff", null }, };
+
+Interface zwp_relative_pointer_v1_interface = {
+	.name = "zwp_relative_pointer_v1",
+	.version = 1,
+	.method_count = relative_pointer_methods.len,
+	.methods = &relative_pointer_methods,
+	.event_count = relative_pointer_events.len,
+	.events = &relative_pointer_events,
+};
+
+alias LockedPointerEvent = fn void(WaylandWindow* data, Proxy locked);
+alias RelativeMotionEvent = fn void(
+	WaylandWindow* data, Proxy relative, uint utime_hi, uint utime_lo, int dx, int dy, int dx_raw, int dy_raw
+);
+
+struct LockedPointerListener
+{
+	LockedPointerEvent locked;
+	LockedPointerEvent unlocked;
+}
+
+struct RelativePointerListener
+{
+	RelativeMotionEvent relative_motion;
+}
+
+fn void lockedPointerLocked(WaylandWindow* data, Proxy locked)
+{
+	data.pointer_locked = true;
+}
+
+fn void lockedPointerUnlocked(WaylandWindow* data, Proxy locked)
+{
+	// The compositor took the lock back — the surface lost focus, or the user
+	// switched away. Reported rather than re-requested: a client that grabbed
+	// the pointer again the instant it was taken would be a client the user
+	// cannot escape.
+	data.pointer_locked = false;
+}
+
+<*
+ The hand's movement, which is the half a locked cursor cannot report.
+
+ Accumulated rather than replaced, because several of these arrive between two
+ polls and each is a movement rather than a position. `wayland_pollEvents`
+ clears it, so what a caller reads is this frame's.
+
+ The accelerated pair is taken and the raw one ignored: the accelerated numbers
+ are what every other pointer path on this backend already reports, and mixing
+ the two would make a look behave differently the moment it was locked.
+*>
+fn void relativePointerMotion(
+	WaylandWindow* data, Proxy relative, uint utime_hi, uint utime_lo, int dx, int dy, int dx_raw, int dy_raw
+)
+{
+	data.relative_motion += (double[<2>]) { fixed_to_double(dx), fixed_to_double(dy) };
+}
+
+LockedPointerListener lockedPointerListener = { &lockedPointerLocked, &lockedPointerUnlocked };
+
+RelativePointerListener relativePointerListener = { &relativePointerMotion };
+
+<*
+ Ask for the pointer, or give it back.
+
+ **`pointer_locked` is not written here.** The request is a request: a
+ compositor refuses a lock on a surface that is not focused, and answers with
+ `locked` when it grants one. Latching the flag on the way out would tell a
+ script it had a look that does not turn, which is worse than telling it the
+ truth and letting it fall back to a drag.
+
+ The lifetime argument is 1 (persistent) rather than 2 (oneshot), so a lock
+ survives losing focus and comes back when focus does — a game alt-tabbed away
+ from and returned to is still in mouse look, which is what every other platform
+ does here.
+*>
+fn void wayland_set_pointer_lock(WaylandWindow* self, bool locked)
+{
+	if (!locked)
+	{
+		if (self.relative_pointer)
+		{
+			proxy_marshal_flags(
+				self.relative_pointer, 0, null, proxy_get_version(self.relative_pointer), WL_MARSHAL_FLAG_DESTROY
+			);
+			self.relative_pointer = null;
+		}
+		if (self.locked_pointer)
+		{
+			proxy_marshal_flags(
+				self.locked_pointer, 0, null, proxy_get_version(self.locked_pointer), WL_MARSHAL_FLAG_DESTROY
+			);
+			self.locked_pointer = null;
+		}
+		self.pointer_locked = false;
+		self.relative_motion = { 0, 0 };
+		return;
+	}
+
+	if (self.locked_pointer != null) return;
+	if (self.pointer_constraints == null || self.pointer == null || self.surface == null) return;
+
+	// zwp_pointer_constraints_v1.lock_pointer(id, surface, pointer, region, lifetime)
+	// → opcode 1. A null region is the whole surface.
+	self.locked_pointer = proxy_marshal_flags(
+		self.pointer_constraints,
+		1,
+		&zwp_locked_pointer_v1_interface,
+		proxy_get_version(self.pointer_constraints),
+		0,
+		null,
+		self.surface,
+		self.pointer,
+		null,
+		1
+	);
+	if (self.locked_pointer == null) return;
+	proxy_add_listener(self.locked_pointer, &lockedPointerListener, self);
+
+	// The deltas. Without them a locked cursor is a mouse that stopped working,
+	// so a manager the compositor does not have means giving the lock straight
+	// back rather than holding a half of it.
+	if (self.relative_pointer_manager == null)
+	{
+		wayland_set_pointer_lock(self, false);
+		return;
+	}
+
+	// zwp_relative_pointer_manager_v1.get_relative_pointer(id, pointer) → opcode 1
+	self.relative_pointer = proxy_marshal_flags(
+		self.relative_pointer_manager,
+		1,
+		&zwp_relative_pointer_v1_interface,
+		proxy_get_version(self.relative_pointer_manager),
+		0,
+		null,
+		self.pointer
+	);
+	if (self.relative_pointer == null)
+	{
+		wayland_set_pointer_lock(self, false);
+		return;
+	}
+	proxy_add_listener(self.relative_pointer, &relativePointerListener, self);
+
+	display_flush(self.display);
+}
+
+fn bool wayland_pointer_locked(WaylandWindow* self) => self.pointer_locked;
+
+// The hand's movement over the last poll, in logical units and with a top-left
+// origin — the same convention `wayland_getMousePos` reports a position in, so
+// `Window.track_mouse_delta` flips both the same way.
+fn double[<2>] wayland_relative_motion(WaylandWindow* self) => self.relative_motion;
+
 // wp_cursor_shape_device_v1.shape values (follow the CSS cursor names).
 fn uint wayland_cursor_shape_value(CursorShape shape)
 {
@@ -927,9 +1253,30 @@ fn void wayland_set_size(WaylandWindow* self, int width, int height)
 	if (width <= 0 || height <= 0) return;
 
 	// set_max_size (opcode 7) and set_min_size (opcode 8) — the same pair
-	// wayland_new uses to fix the window's geometry.
+	// wayland_create uses to fix the window's geometry, and they have to move
+	// first: a compositor will not grant a size outside constraints the client
+	// itself pinned.
 	proxy_marshal_flags(self.top_level, 7, null, proxy_get_version(self.top_level), 0, width, height);
 	proxy_marshal_flags(self.top_level, 8, null, proxy_get_version(self.top_level), 0, width, height);
+
+	// xdg_surface.set_window_geometry(x, y, width, height) → opcode 3. What the
+	// client says its own logical rectangle is, minus any shadow it draws
+	// outside one; without it the compositor measures the buffer instead.
+	if (self.xdg_surface != null)
+	{
+		proxy_marshal_flags(self.xdg_surface, 3, null, proxy_get_version(self.xdg_surface), 0, 0, 0, width, height);
+	}
+
+	// Recorded, and this is the protocol rather than optimism: **a Wayland
+	// client's size is the buffer it commits.** The compositor answers a commit
+	// with a configure rather than sending one in advance, so the constraints
+	// above move nothing on their own — whoever draws has to read this back,
+	// build at it and commit, and `topSurfaceConfigure` then either agrees or
+	// corrects it. Leaving it unrecorded made this call do nothing at all,
+	// because the size never changed and so nothing was ever redrawn.
+	self.width = width;
+	self.height = height;
+
 	surface_commit(self.surface);
 }
 
@@ -997,6 +1344,8 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 	self.scroll_precise = false;
 	self.text.clear();
 	self.event_log.clear();
+	// A movement rather than a position, so it is this poll's or it is nothing.
+	self.relative_motion = { 0, 0 };
 
 	// Non-blocking event dispatch
 	while (prepare_read(self.display) != 0)
@@ -1007,8 +1356,21 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 
 	// wait == true (on-demand idle): block in poll() until an event arrives so
 	// the thread parks at ~0% CPU; a nil timeout otherwise polls and returns.
-	PollFd pfd = { .fd = display_get_fd(self.display), .events = POLLIN, .revents = 0 };
-	if (poll(&pfd, 1, wait ? -1 : 0) > 0)
+	//
+	// Two fds, and the second is what makes `wayland_wake` mean anything: a poll
+	// on the display alone goes on sleeping through every request a worker
+	// thread has for this one, however long it waits.
+	PollFd[2] fds = {
+		{ .fd = display_get_fd(self.display), .events = POLLIN, .revents = 0 },
+		{ .fd = self.wake_read, .events = POLLIN, .revents = 0 },
+	};
+	uint watched = self.wake_read >= 0 ? 2 : 1;
+
+	bool ready = poll(&fds[0], watched, wait ? -1 : 0) > 0;
+	// The display's own readiness, not the poll's: a wake and nothing else means
+	// there is nothing on the wire, and reading anyway would block. The prepared
+	// read has to be given back either way or the next prepare deadlocks.
+	if (ready && (fds[0].revents & POLLIN) != 0)
 	{
 		read_events(self.display);
 	}
@@ -1016,12 +1378,69 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 	{
 		cancel_read(self.display);
 	}
+
+	// Drained whether or not it was this poll that saw it, so a wake sent while
+	// the loop was busy cannot leave the pipe readable and turn the next
+	// `wait: true` into a spin.
+	if (self.wake_read >= 0)
+	{
+		char[64] spent;
+		while (read_fd(self.wake_read, &spent[0], spent.len) > 0) {}
+	}
+
 	dispatch_pending(self.display);
+}
+
+<*
+ The size the last configure settled on, in logical units.
+
+ Logical rather than physical, which is the contract everything else on this
+ backend keeps: `wayland_get_scale` is the factor between the two, and buffers
+ are the product.
+*>
+fn int[<2>] wayland_get_size(WaylandWindow* self) => { self.width, self.height };
+
+<*
+ Make a parked `poll` return, from any thread.
+
+ One byte down a pipe whose read end is in that poll set. Safe from a foreign
+ thread in the way nothing else here is: it touches no Wayland object, no
+ display connection and nothing on the window, and `write` on a pipe is atomic
+ for a single byte.
+
+ A full pipe is not an error and is not retried. The pipe filling means many
+ wakes have been sent and none consumed, and one more byte would say exactly
+ what the bytes already in there are about to.
+*>
+fn void wayland_wake(WaylandWindow* self)
+{
+	if (self.wake_write < 0) return;
+	char one = 1;
+	write_fd(self.wake_write, &one, 1);
 }
 
 // Free and destroys window instance
 fn void wayland_free(WaylandWindow* self)
 {
+	// Before the proxies: an unlock destroys two of them, and doing it after
+	// they were destroyed would be a request on a dead object.
+	wayland_set_pointer_lock(self, false);
+	if (self.relative_pointer_manager) proxy_marshal_flags(
+		self.relative_pointer_manager,
+		0,
+		null,
+		proxy_get_version(self.relative_pointer_manager),
+		WL_MARSHAL_FLAG_DESTROY
+	);
+	if (self.pointer_constraints) proxy_marshal_flags(
+		self.pointer_constraints,
+		0,
+		null,
+		proxy_get_version(self.pointer_constraints),
+		WL_MARSHAL_FLAG_DESTROY
+	);
+	if (self.wake_read >= 0) close_fd(self.wake_read);
+	if (self.wake_write >= 0) close_fd(self.wake_write);
 	self.text.free();
 	xkb_free(self.xkb_context, self.xkb_keymap, self.xkb_state);
 	if (self.cursor_shape_device) proxy_marshal_flags(
