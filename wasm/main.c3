@@ -271,6 +271,33 @@ fn void Window.set_size(&self, int width, int height)
 }
 
 <*
+ A no-op. Naming the tab is `document.title` and belongs to the page rather than
+ to the canvas this library owns; a wasm build renaming its host's tab out from
+ under it would be a surprise, not a feature. Present so that code written
+ against `c3w` still compiles for wasm.
+*>
+fn void Window.set_title(&self, String title)
+{
+}
+
+<*
+ Always false. The Fullscreen API needs a user gesture — a click or a key, in
+ the handler itself — so a game cannot enter fullscreen by asking, and a canvas
+ that reported it might is worse than one that says plainly it cannot.
+*>
+fn bool Window.fullscreen(&self)
+{
+	return false;
+}
+
+<*
+ A no-op, for `fullscreen`'s reason.
+*>
+fn void Window.set_fullscreen(&self, bool on)
+{
+}
+
+<*
  A no-op, and it cannot be anything else: a page cannot minimise the browser it
  is running in, and nothing in the DOM corresponds to an iconified window.
  Present so that code written against `c3w` still compiles for wasm.

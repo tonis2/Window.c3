@@ -43,6 +43,47 @@ const int SW_MINIMIZE = 6;
 const int SW_RESTORE  = 9;
 
 // SetWindowPos flags
+// Fullscreen, which on Windows is a style change and a move rather than a mode:
+// the borderless-over-the-monitor-rect shape, so the compositor never switches
+// the display and alt-tab stays instant.
+const int GWL_STYLE = -16;
+const uint SWP_NOSIZE          = 0x0001;
+const uint SWP_FRAMECHANGED    = 0x0020;
+const uint SWP_NOOWNERZORDER   = 0x0200;
+const uint MONITOR_DEFAULTTONEAREST = 2;
+
+typedef HMonitor = void*;
+
+struct MonitorInfo
+{
+	uint cbSize;
+	Rect rcMonitor;
+	Rect rcWork;
+	uint dwFlags;
+}
+
+<*
+ What `GetWindowPlacement` fills, so leaving fullscreen puts the window back
+ exactly where it was — including the fact that it was maximised.
+*>
+struct WindowPlacement
+{
+	uint length;
+	uint flags;
+	uint showCmd;
+	Point ptMinPosition;
+	Point ptMaxPosition;
+	Rect rcNormalPosition;
+}
+
+extern fn bool setWindowTextW(HWnd hwnd, Char16* text) @cname("SetWindowTextW");
+extern fn iptr getWindowLongPtrW(HWnd hwnd, int index) @cname("GetWindowLongPtrW");
+extern fn iptr setWindowLongPtrW(HWnd hwnd, int index, iptr value) @cname("SetWindowLongPtrW");
+extern fn HMonitor monitorFromWindow(HWnd hwnd, uint flags) @cname("MonitorFromWindow");
+extern fn bool getMonitorInfoW(HMonitor monitor, MonitorInfo* info) @cname("GetMonitorInfoW");
+extern fn bool getWindowPlacement(HWnd hwnd, WindowPlacement* placement) @cname("GetWindowPlacement");
+extern fn bool setWindowPlacement(HWnd hwnd, WindowPlacement* placement) @cname("SetWindowPlacement");
+
 const uint SWP_NOMOVE     = 0x0002;
 const uint SWP_NOZORDER   = 0x0004;
 const uint SWP_NOACTIVATE = 0x0010;
@@ -160,6 +201,13 @@ struct Win32Window
 	bool has_last;
 
 	bool pointer_locked;
+
+	// Fullscreen is a style change here, so leaving it needs what was replaced:
+	// the placement (position, size, and whether it was maximised) and the style
+	// bits that were taken out. Meaningless unless `is_fullscreen`.
+	WindowPlacement saved_placement;
+	iptr saved_style;
+	bool is_fullscreen;
 }
 
 // Window procedure callback
@@ -789,6 +837,89 @@ fn void Window.set_size(&self, int width, int height)
 		(int)((float)height * scale) + chrome_height,
 		SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
 	);
+}
+
+<*
+ Rename the window's title bar.
+
+ `SetWindowTextW` and a real UTF-16 conversion, rather than the ASCII widening
+ `new` does for the class name: a title is a game's own name and is as likely to
+ carry an accent as not.
+*>
+fn void Window.set_title(&self, String title)
+{
+	if (self.src.hwnd == null) return;
+	@pool()
+	{
+		WString wide = title.to_temp_wstring() ?? (WString)null;
+		if (wide == null) return;
+		setWindowTextW(self.src.hwnd, (Char16*)wide);
+	};
+}
+
+<*
+ Whether the window is currently filling a monitor.
+
+ Remembered rather than read back, unlike macOS. There is no Windows state that
+ says "fullscreen" — the window is merely borderless and the size of a display —
+ so the only honest answer is what this library last did.
+*>
+fn bool Window.fullscreen(&self)
+{
+	return self.src.is_fullscreen;
+}
+
+<*
+ Enter or leave borderless fullscreen.
+
+ Borderless over the monitor's rect rather than an exclusive mode change: the
+ display's resolution never moves, so alt-tab is instant, the desktop behind is
+ undisturbed and a crash cannot leave a monitor in a mode nobody asked for. The
+ render size is a boot argument anyway — the swapchain stretches the offscreen
+ target over whatever the window became — so an exclusive mode would buy the
+ picture nothing.
+*>
+fn void Window.set_fullscreen(&self, bool on)
+{
+	if (self.src.hwnd == null || self.src.is_fullscreen == on) return;
+
+	if (on)
+	{
+		self.src.saved_placement.length = (uint)@sizeof(self.src.saved_placement);
+		if (!getWindowPlacement(self.src.hwnd, &self.src.saved_placement)) return;
+
+		MonitorInfo info;
+		info.cbSize = (uint)@sizeof(info);
+		HMonitor monitor = monitorFromWindow(self.src.hwnd, MONITOR_DEFAULTTONEAREST);
+		if (!getMonitorInfoW(monitor, &info)) return;
+
+		self.src.saved_style = getWindowLongPtrW(self.src.hwnd, GWL_STYLE);
+		setWindowLongPtrW(self.src.hwnd, GWL_STYLE, self.src.saved_style & ~(iptr)win32::WS_OVERLAPPEDWINDOW);
+		setWindowPos(
+			self.src.hwnd,
+			(HWnd)null,
+			info.rcMonitor.left,
+			info.rcMonitor.top,
+			info.rcMonitor.right - info.rcMonitor.left,
+			info.rcMonitor.bottom - info.rcMonitor.top,
+			SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+		);
+		self.src.is_fullscreen = true;
+		return;
+	}
+
+	setWindowLongPtrW(self.src.hwnd, GWL_STYLE, self.src.saved_style);
+	setWindowPlacement(self.src.hwnd, &self.src.saved_placement);
+	setWindowPos(
+		self.src.hwnd,
+		(HWnd)null,
+		0,
+		0,
+		0,
+		0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+	);
+	self.src.is_fullscreen = false;
 }
 
 <*

@@ -601,6 +601,54 @@ fn void Window.set_size(&self, int width, int height)
 }
 
 <*
+ Rename the window's title bar.
+*>
+fn void Window.set_title(&self, String title)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_title((WaylandWindow*)self.src.backend_data, title);
+		case X11:     x11_set_title((X11Window*)self.src.backend_data, title);
+		default:      break;
+	}
+}
+
+<*
+ Whether the last fullscreen request was to be fullscreen.
+
+ Neither backend is asked. X11's true answer is a `_NET_WM_STATE` read and
+ Wayland's is in a configure event's state array; both are a request away from
+ the window manager's opinion, and this reports what was asked for — which is
+ what the other two platforms report as well.
+*>
+fn bool Window.fullscreen(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: return wayland_fullscreen((WaylandWindow*)self.src.backend_data);
+		case X11:     return x11_fullscreen((X11Window*)self.src.backend_data);
+		default:      return false;
+	}
+}
+
+<*
+ Ask to fill the display, or to stop.
+
+ A request on both backends and answered by somebody else — the window manager
+ on X11, the compositor on Wayland — so the size that follows arrives on a later
+ frame, exactly as `set_size`'s does.
+*>
+fn void Window.set_fullscreen(&self, bool on)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_set_fullscreen((WaylandWindow*)self.src.backend_data, on);
+		case X11:     x11_set_fullscreen((X11Window*)self.src.backend_data, on);
+		default:      break;
+	}
+}
+
+<*
  Minimise the window, or restore it.
 
  **Restoring works on X11 and not on Wayland.** xdg-shell has a `set_minimized`

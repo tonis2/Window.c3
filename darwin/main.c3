@@ -680,6 +680,53 @@ fn void Window.set_size(&self, int width, int height)
 }
 
 <*
+ Rename the window's title bar.
+
+ A copy is made because AppKit keeps the NSString and not the bytes behind it,
+ and the caller's `String` need not outlive the call — nor be null-terminated,
+ which is why this goes through `zstr_tcopy` rather than casting.
+*>
+fn void Window.set_title(&self, String title)
+{
+	@pool()
+	{
+		NSString text = new_object("NSString");
+		text.stringWithUTF8String(title.zstr_tcopy());
+		self.src.window.setTitle(text);
+	};
+}
+
+<*
+ Whether the window is in macOS's own fullscreen space.
+
+ Read off the style mask rather than remembered, because a person can put a
+ window in and out of fullscreen from the green button and from Mission Control
+ without asking this library at all.
+*>
+fn bool Window.fullscreen(&self)
+{
+	return (self.src.window.style_mask() & NSWindowStyleMask.FULL_SCREEN) != 0;
+}
+
+<*
+ Enter or leave fullscreen.
+
+ AppKit has a toggle and no setter, so the current state is read first and the
+ toggle sent only when it disagrees — otherwise a game calling `set_fullscreen(true)`
+ every frame would flip in and out of the space forever.
+
+ The transition is animated and takes about half a second, during which the
+ window keeps working and `fullscreen()` already answers the new value. What
+ follows is a resize, which reaches the swapchain exactly as a dragged corner
+ does.
+*>
+fn void Window.set_fullscreen(&self, bool on)
+{
+	if (self.fullscreen() == on) return;
+	self.src.window.toggle_fullscreen();
+}
+
+<*
  Minimise the window to the Dock, or restore it.
 
  Both directions work here, unlike Wayland, where xdg-shell has a

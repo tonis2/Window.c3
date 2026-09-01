@@ -26,6 +26,10 @@ struct X11Window
 	double scroll_delta_x;  // the horizontal half (+ = right)
 	DString text;           // text typed during the last poll
 	uint current_cursor;    // active X cursor resource (0 = none created yet)
+	// What was last asked for through `x11_set_fullscreen`. The manager may
+	// refuse, and a `_NET_WM_STATE` read back would be the true answer; this is
+	// the cheap one, and it is what every other backend reports too.
+	bool is_fullscreen;
 	// The size the last ConfigureNotify settled on. The window manager is free
 	// to adjust or refuse what `x11_set_size` asked for, so this is the only
 	// number that is true — `Params` is a request and goes stale the first time
@@ -36,6 +40,9 @@ struct X11Window
 	// own atom rather than a reused one so the handler can tell a wake from a
 	// WM_DELETE_WINDOW without reading further into the message.
 	uint wake_atom;
+	// The screen's root window. `_NET_WM_STATE` is a message to the root rather
+	// than to us — the window manager is the one acting on it.
+	uint root;
 	// Pointer lock. `blank_cursor` is a 1x1 transparent cursor made on the first
 	// lock and kept for the window's life — creating one per call would churn a
 	// server resource sixty times a second. `shape_cursor` is what
@@ -130,6 +137,22 @@ struct ClientMessageEvent
 
 // xcb_configure_notify_event_t. The window manager sends one for every geometry
 // change it settles, including the ones it made up in answer to a request.
+// The same event with all five data words. `_NET_WM_STATE` uses three of them,
+// and `ClientMessageEvent` above stops at the first.
+struct WmStateEvent
+{
+	char response_type;
+	char format;
+	short sequence;
+	uint window;
+	uint type;
+	uint data0;
+	uint data1;
+	uint data2;
+	uint data3;
+	uint data4;
+}
+
 struct ConfigureNotifyEvent
 {
 	char response_type;
@@ -285,6 +308,11 @@ enum XcbEventMask : uint (uint value)
 	EVENT_MASK_POINTER_MOTION_HINT { 128 },
 	EVENT_MASK_STRUCTURE_NOTIFY    { 131072 },
 	EVENT_MASK_VISIBILITY_CHANGE   { 65536 },
+	// The two the window manager selects on the root window. A `_NET_WM_STATE`
+	// message is addressed to the root and is meant for the manager, so it is
+	// sent with these rather than with a zero mask.
+	EVENT_MASK_SUBSTRUCTURE_NOTIFY   { 524288 },
+	EVENT_MASK_SUBSTRUCTURE_REDIRECT { 1048576 },
 }
 
 enum XcbPropMode : uint (uint value)
@@ -426,6 +454,7 @@ fn X11Window? x11_create(Params params, String name)
 		.initialized = true,
 		.wm_delete_window = wm_delete_window,
 		.wake_atom = wake_atom,
+		.root = screen_iterator.data.root,
 		// What was asked for, until the first ConfigureNotify says otherwise.
 		// The server sends one when the window is mapped, so this is the answer
 		// for a handful of milliseconds at most.
@@ -672,6 +701,94 @@ fn void x11_wake(X11Window* self)
 	xcbSendEvent(self.connection, 0, self.window, 0, &message);
 	xcbFlush(self.connection);
 }
+
+<*
+ Rename the window.
+
+ Both properties, because window managers disagree about which one to read:
+ `_NET_WM_NAME` is UTF-8 and is what anything current prefers, and `WM_NAME`
+ (atom 39, type `STRING` 31) is the core-protocol one `new` already sets and
+ older managers still use. Setting one and not the other leaves a title bar
+ disagreeing with a taskbar.
+
+ The atoms are interned per call rather than kept. Each is one round trip and
+ this happens when a game boots or a person opens a settings menu, which is not
+ a rate worth caching against.
+*>
+fn void x11_set_title(X11Window* self, String title)
+{
+	if (self.connection == null || xcbChangeProperty == null) return;
+
+	uint net_wm_name = x11_intern_atom(self.connection, "_NET_WM_NAME");
+	uint utf8_string = x11_intern_atom(self.connection, "UTF8_STRING");
+	if (net_wm_name != 0 && utf8_string != 0)
+	{
+		xcbChangeProperty(
+			self.connection,
+			XcbProp.PROP_MODE_REPLACE,
+			self.window,
+			net_wm_name,
+			utf8_string,
+			8,
+			(uint)title.len,
+			(char*)title.ptr
+		);
+	}
+	xcbChangeProperty(self.connection, XcbProp.PROP_MODE_REPLACE, self.window, 39, 31, 8, (uint)title.len, (char*)title.ptr);
+	xcbFlush(self.connection);
+}
+
+<*
+ Ask the window manager to make this window fullscreen, or to stop.
+
+ A `_NET_WM_STATE` ClientMessage to the ROOT window, which is how the EWMH
+ spells every state change a client wants: the manager owns the window's
+ geometry and decorations, so a client that moved itself over the monitor would
+ be fighting whatever the manager did next.
+
+ The mask matters here where `x11_wake`'s zero mask did not. This message is for
+ the window manager, which selects `SubstructureRedirect` and
+ `SubstructureNotify` on the root, and a zero mask would deliver it to the root
+ window itself, where nobody is listening.
+
+ It is a request. A manager may refuse, and a bare X session with no manager at
+ all will do nothing — there is no one to act on it.
+*>
+fn void x11_set_fullscreen(X11Window* self, bool on)
+{
+	if (self.connection == null || xcbSendEvent == null || self.root == 0) return;
+
+	uint state      = x11_intern_atom(self.connection, "_NET_WM_STATE");
+	uint fullscreen = x11_intern_atom(self.connection, "_NET_WM_STATE_FULLSCREEN");
+	if (state == 0 || fullscreen == 0) return;
+
+	char[32] message;
+	WmStateEvent* ask = (WmStateEvent*)&message;
+	ask.response_type = 33; // ClientMessage
+	ask.format = 32;
+	ask.window = (uint)(uptr)self.window;
+	ask.type = state;
+	// _NET_WM_STATE_REMOVE 0, _NET_WM_STATE_ADD 1.
+	ask.data0 = on ? 1 : 0;
+	ask.data1 = fullscreen;
+	ask.data2 = 0;
+	// Source indication: 1 is "a normal application", which is what a manager
+	// with a focus-stealing policy wants to see.
+	ask.data3 = 1;
+	ask.data4 = 0;
+
+	xcbSendEvent(
+		self.connection,
+		0,
+		(XCB_Window)(uptr)self.root,
+		XcbEventMask.EVENT_MASK_SUBSTRUCTURE_REDIRECT.value | XcbEventMask.EVENT_MASK_SUBSTRUCTURE_NOTIFY.value,
+		&message
+	);
+	xcbFlush(self.connection);
+	self.is_fullscreen = on;
+}
+
+fn bool x11_fullscreen(X11Window* self) => self.is_fullscreen;
 
 fn float x11_get_scroll(X11Window* self) => (float)self.scroll_delta;
 fn float x11_get_scroll_x(X11Window* self) => (float)self.scroll_delta_x;

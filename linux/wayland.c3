@@ -75,6 +75,11 @@ struct WaylandWindow
 	// at this factor so the compositor never upscales them
 	Proxy[8] outputs; // bound wl_outputs, destroyed in wayland_free
 	int output_count;
+	// What was last asked for through `wayland_set_fullscreen`. The compositor
+	// reports the truth in the `configure` event's state array, which this
+	// backend does not read; this is what was requested, which is what every
+	// other backend reports as well.
+	bool is_fullscreen;
 	Proxy decoration_manager; // zxdg_decoration_manager_v1, if the compositor has it
 	Proxy toplevel_decoration; // this window's decoration object (server-side titlebar)
 
@@ -1298,6 +1303,54 @@ fn void wayland_set_minimized(WaylandWindow* self, bool minimized)
 	proxy_marshal_flags(self.top_level, 13, null, proxy_get_version(self.top_level), 0);
 	surface_commit(self.surface);
 }
+
+<*
+ Rename the window.
+
+ `xdg_toplevel.set_title`, opcode 2 — the same request `new` sends once with the
+ name it was given. The compositor keeps a copy, so the caller's bytes need not
+ outlive the call; they do have to be null-terminated, which is what the
+ `zstr_tcopy` is for.
+*>
+fn void wayland_set_title(WaylandWindow* self, String title)
+{
+	if (self.top_level == null || proxy_marshal_flags == null) return;
+	@pool()
+	{
+		proxy_marshal_flags(self.top_level, 2, null, proxy_get_version(self.top_level), 0, title.zstr_tcopy());
+	};
+	surface_commit(self.surface);
+}
+
+<*
+ Ask the compositor for fullscreen, or give it back.
+
+ Two requests rather than one with a flag: `set_fullscreen` is opcode 11 and
+ takes an optional `wl_output` — null meaning "whichever you think best", which
+ is the right answer for a single-monitor game and a reasonable one otherwise —
+ and `unset_fullscreen` is opcode 12 and takes nothing.
+
+ A request, like everything in this protocol. What actually happens arrives as a
+ `configure` with a new size, some frames later, and the swapchain follows it the
+ same way it follows a dragged edge.
+*>
+fn void wayland_set_fullscreen(WaylandWindow* self, bool on)
+{
+	if (self.top_level == null || proxy_marshal_flags == null) return;
+
+	if (on)
+	{
+		proxy_marshal_flags(self.top_level, 11, null, proxy_get_version(self.top_level), 0, null);
+	}
+	else
+	{
+		proxy_marshal_flags(self.top_level, 12, null, proxy_get_version(self.top_level), 0);
+	}
+	surface_commit(self.surface);
+	self.is_fullscreen = on;
+}
+
+fn bool wayland_fullscreen(WaylandWindow* self) => self.is_fullscreen;
 
 fn void wayland_set_cursor(WaylandWindow* self, CursorShape shape)
 {

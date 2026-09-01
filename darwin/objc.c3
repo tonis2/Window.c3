@@ -366,6 +366,10 @@ fn void NSView.set_layer(self, CALayer layer) => objc::msg_send(self.id, SendId,
 
 // backingScaleFactor returns CGFloat — must go through a double-returning
 // call, like get_scrolling_delta above.
+fn ulong NSWindow.style_mask(&self) => objc::msg_send(self.id, GetULong, "styleMask");
+// `toggleFullScreen:` and not `setFullScreen:`, because AppKit has no setter —
+// the state is read off the style mask and changed by asking for the change.
+fn void NSWindow.toggle_fullscreen(&self) => objc::msg_send(self.id, SendPtr, "toggleFullScreen:", null);
 fn double NSWindow.backing_scale_factor(&self) => objc::msg_send(self.id, GetDouble, "backingScaleFactor");
 fn void CALayer.set_contents_scale(&self, double scale) => objc::msg_send(self.id, SendDouble, "setContentsScale:", scale);
 
