@@ -403,6 +403,13 @@ fn void topSurfaceConfigure(WaylandWindow* data, XDG_top_level top_level, int wi
 {
 	if (width > 0) data.width = width;
 	if (height > 0) data.height = height;
+	// A prior set_size supplied explicit geometry; keep it in sync when the
+	// user resizes too, otherwise the compositor retains that old rectangle.
+	if (data.xdg_surface != null && data.width > 0 && data.height > 0)
+	{
+		proxy_marshal_flags(data.xdg_surface, 3, null, proxy_get_version(data.xdg_surface),
+			0, 0, 0, data.width, data.height);
+	}
 }
 fn void topSurfaceBounds(WaylandWindow* data, XDG_top_level top_level, int width, int height)
 {
@@ -785,10 +792,8 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	proxy_marshal_flags(window.top_level, 2, null, proxy_get_version(window.top_level), 0, name.ptr);
 	// Set app_id (opcode 3)
 	proxy_marshal_flags(window.top_level, 3, null, proxy_get_version(window.top_level), 0, name.ptr);
-	// Set max size (opcode 7)
-	proxy_marshal_flags(window.top_level, 7, null, proxy_get_version(window.top_level), 0, params.width, params.height);
-	// Set min size (opcode 8)
-	proxy_marshal_flags(window.top_level, 8, null, proxy_get_version(window.top_level), 0, params.width, params.height);
+	// Leave size constraints unset so the user can resize and maximise. The
+	// initial buffer supplies the requested size when the compositor defers to us.
 
 	// A bare xdg_toplevel has no title bar, so nothing to drag or close the
 	// window with. Ask the compositor to draw one (server-side decorations).
@@ -1241,11 +1246,9 @@ fn uint wayland_cursor_shape_value(CursorShape shape)
 <*
  Resize the window, in logical points.
 
- Wayland has no "set my size" request — the compositor owns window geometry and
- a client asks for a size by constraining it. `wayland_new` pins the window by
- setting `set_max_size` and `set_min_size` to the same value, so re-issuing that
- pair is how the size changes, and the compositor answers with an
- xdg_toplevel.configure at the size it settled on.
+ Wayland has no "set my size" request. Supply a new client geometry and buffer
+ size without restricting subsequent user resizing. The compositor can correct
+ the requested size through xdg_toplevel.configure.
 
  The shm buffer created at startup is not touched, and does not need to be: it
  is a placeholder that exists so the window is visible before the client has
@@ -1257,13 +1260,6 @@ fn void wayland_set_size(WaylandWindow* self, int width, int height)
 	if (self.top_level == null || proxy_marshal_flags == null) return;
 	if (width <= 0 || height <= 0) return;
 
-	// set_max_size (opcode 7) and set_min_size (opcode 8) — the same pair
-	// wayland_create uses to fix the window's geometry, and they have to move
-	// first: a compositor will not grant a size outside constraints the client
-	// itself pinned.
-	proxy_marshal_flags(self.top_level, 7, null, proxy_get_version(self.top_level), 0, width, height);
-	proxy_marshal_flags(self.top_level, 8, null, proxy_get_version(self.top_level), 0, width, height);
-
 	// xdg_surface.set_window_geometry(x, y, width, height) → opcode 3. What the
 	// client says its own logical rectangle is, minus any shadow it draws
 	// outside one; without it the compositor measures the buffer instead.
@@ -1274,8 +1270,7 @@ fn void wayland_set_size(WaylandWindow* self, int width, int height)
 
 	// Recorded, and this is the protocol rather than optimism: **a Wayland
 	// client's size is the buffer it commits.** The compositor answers a commit
-	// with a configure rather than sending one in advance, so the constraints
-	// above move nothing on their own — whoever draws has to read this back,
+	// with a configure rather than sending one in advance — whoever draws reads this back,
 	// build at it and commit, and `topSurfaceConfigure` then either agrees or
 	// corrects it. Leaving it unrecorded made this call do nothing at all,
 	// because the size never changed and so nothing was ever redrawn.
