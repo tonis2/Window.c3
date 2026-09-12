@@ -380,8 +380,9 @@ fn void shellSurfaceConfigure(WaylandWindow* window, XDG_surface surface, uint s
 {
 	// ack_configure
 	proxy_marshal_flags(surface, 4, null, proxy_get_version(surface), 0, serial);
-	// Commit the surface so the compositor knows we're responsive
-	surface_commit(window.surface);
+	// The next rendered buffer commits this acknowledgement together with the
+	// new geometry. Committing the old buffer here advances a live resize before
+	// the client has drawn its new size.
 }
 
 fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
