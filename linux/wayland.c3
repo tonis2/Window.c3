@@ -82,11 +82,14 @@ struct WaylandWindow
 	bool is_fullscreen;
 	Proxy decoration_manager; // zxdg_decoration_manager_v1, if the compositor has it
 	Proxy toplevel_decoration; // this window's decoration object (server-side titlebar)
+	Proxy viewporter;
+	Proxy viewport;
+	bool resize_preview;
+	int surface_width;
+	int surface_height;
 
-	// The size the last xdg_toplevel.configure settled on, in logical units. A
-	// Wayland client does not choose its own size — it asks, and the compositor
-	// answers with this — so it is the only number that is true, and `Params` is
-	// stale the moment anything resizes.
+	// Buffer size in logical units. During an interactive resize the compositor
+	// scales it to surface_width/height; expose the final size only on release.
 	int width;
 	int height;
 
@@ -321,6 +324,7 @@ fn bool wayland_load()
 
 	// Patch xdg_shell protocol type arrays with loaded interface pointers
 	get_xdg_surface[1] = wl_surface_interface;
+	viewport_get_types[1] = wl_surface_interface;
 	get_popup[1] = wl_surface_interface;
 	show_window_menu[0] = wl_seat_interface;
 	move[0] = wl_seat_interface;
@@ -380,9 +384,11 @@ fn void shellSurfaceConfigure(WaylandWindow* window, XDG_surface surface, uint s
 {
 	// ack_configure
 	proxy_marshal_flags(surface, 4, null, proxy_get_version(surface), 0, serial);
-	// The next rendered buffer commits this acknowledgement together with the
-	// new geometry. Committing the old buffer here advances a live resize before
-	// the client has drawn its new size.
+	// While dragging, no new buffer is needed: commit the viewport destination
+	// against the existing buffer so the border follows the pointer immediately.
+	if (window.resize_preview) surface_commit(window.surface);
+	// Outside preview mode the next rendered buffer commits the acknowledgement
+	// together with its new geometry.
 }
 
 fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
@@ -402,14 +408,34 @@ fn void topSurfaceClose(WaylandWindow* data, XDG_top_level top_level)
 *>
 fn void topSurfaceConfigure(WaylandWindow* data, XDG_top_level top_level, int width, int height, void* states)
 {
-	if (width > 0) data.width = width;
-	if (height > 0) data.height = height;
+	bool dragging = false;
+	WLArray* values = (WLArray*)states;
+	if (values != null && values.data != null)
+	{
+		uint* entries = (uint*)values.data;
+		for (sz i = 0; i < values.size / 4; i++) // packed uint32 state values
+		{
+			if (entries[i] == 3) dragging = true; // xdg_toplevel.state.resizing
+		}
+	}
+	if (width > 0) data.surface_width = width;
+	if (height > 0) data.surface_height = height;
+	data.resize_preview = dragging && data.viewport != null;
+	if (!data.resize_preview)
+	{
+		data.width = data.surface_width;
+		data.height = data.surface_height;
+	}
+	if (data.viewport != null && data.surface_width > 0 && data.surface_height > 0)
+	{
+		proxy_marshal_flags(data.viewport, 2, null, 1, 0, data.surface_width, data.surface_height);
+	}
 	// A prior set_size supplied explicit geometry; keep it in sync when the
 	// user resizes too, otherwise the compositor retains that old rectangle.
-	if (data.xdg_surface != null && data.width > 0 && data.height > 0)
+	if (data.xdg_surface != null && data.surface_width > 0 && data.surface_height > 0)
 	{
 		proxy_marshal_flags(data.xdg_surface, 3, null, proxy_get_version(data.xdg_surface),
-			0, 0, 0, data.width, data.height);
+			0, 0, 0, data.surface_width, data.surface_height);
 	}
 }
 fn void topSurfaceBounds(WaylandWindow* data, XDG_top_level top_level, int width, int height)
@@ -643,6 +669,10 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 	{
 		window.decoration_manager = registry_bind(registry, &zxdg_decoration_manager_v1_interface, name, 1);
 	}
+	if (action_name == "wp_viewporter")
+	{
+		window.viewporter = registry_bind(registry, &wp_viewporter_interface, name, 1);
+	}
 
 	if (action_name == "zwp_pointer_constraints_v1")
 	{
@@ -724,6 +754,8 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	// the roundtrip or two it takes.
 	window.width = params.width;
 	window.height = params.height;
+	window.surface_width = params.width;
+	window.surface_height = params.height;
 
 	// Both ends of the wake pipe, or neither: a wake that could half-exist would
 	// be a poll set with a fd nobody writes to.
@@ -746,6 +778,11 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 	assert(window.surface);
 	assert(window.shell);
+	if (window.viewporter != null)
+	{
+		window.viewport = proxy_marshal_flags(window.viewporter, 1, &wp_viewport_interface,
+			1, 0, null, window.surface);
+	}
 
 	// The wl_outputs bound during the dispatch above have their own events
 	// (including scale) still in flight; one more roundtrip collects them
@@ -906,6 +943,14 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 fn float[<2>] wayland_getMousePos(WaylandWindow* self)
 {
+	if (self.resize_preview && self.surface_width > 0 && self.surface_height > 0)
+	{
+		float[<2>] factor = {
+			(float)self.width / (float)self.surface_width,
+			(float)self.height / (float)self.surface_height
+		};
+		return self.mouse_pos * factor;
+	}
 	return self.mouse_pos;
 }
 
@@ -946,6 +991,26 @@ Interface wp_cursor_shape_device_v1_interface = {
 	.methods = &cursor_shape_device_methods,
 	.event_count = 0,
 	.events = null,
+};
+
+// --- viewporter: scale the existing buffer while the user drags a border ---
+Interface*[*] viewport_get_types = { &wp_viewport_interface, null };
+Message[*] viewporter_methods = {
+	{ "destroy", "", null },
+	{ "get_viewport", "no", &viewport_get_types },
+};
+Interface wp_viewporter_interface = {
+	.name = "wp_viewporter", .version = 1,
+	.method_count = viewporter_methods.len, .methods = &viewporter_methods,
+};
+Message[*] viewport_methods = {
+	{ "destroy", "", null },
+	{ "set_source", "ffff", null },
+	{ "set_destination", "ii", null },
+};
+Interface wp_viewport_interface = {
+	.name = "wp_viewport", .version = 1,
+	.method_count = viewport_methods.len, .methods = &viewport_methods,
 };
 
 // --- xdg-decoration-unstable-v1 protocol (server-side window decorations) ---
@@ -1277,6 +1342,12 @@ fn void wayland_set_size(WaylandWindow* self, int width, int height)
 	// because the size never changed and so nothing was ever redrawn.
 	self.width = width;
 	self.height = height;
+	self.surface_width = width;
+	self.surface_height = height;
+	if (self.viewport != null)
+	{
+		proxy_marshal_flags(self.viewport, 2, null, 1, 0, width, height);
+	}
 
 	surface_commit(self.surface);
 }
@@ -1441,7 +1512,8 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 }
 
 <*
- The size the last configure settled on, in logical units.
+ The drawable size, in logical units. Held at the pre-drag size while the
+ compositor scales a live resize preview, then updated on release.
 
  Logical rather than physical, which is the contract everything else on this
  backend keeps: `wayland_get_scale` is the factor between the two, and buffers
@@ -1471,6 +1543,8 @@ fn void wayland_wake(WaylandWindow* self)
 // Free and destroys window instance
 fn void wayland_free(WaylandWindow* self)
 {
+	if (self.viewport) proxy_marshal_flags(self.viewport, 0, null, 1, WL_MARSHAL_FLAG_DESTROY);
+	if (self.viewporter) proxy_marshal_flags(self.viewporter, 0, null, 1, WL_MARSHAL_FLAG_DESTROY);
 	// Before the proxies: an unlock destroys two of them, and doing it after
 	// they were destroyed would be a request on a dead object.
 	wayland_set_pointer_lock(self, false);
