@@ -54,6 +54,7 @@ struct ClipOffer
 	Proxy proxy;
 	bool utf8;  // text/plain;charset=utf-8 or UTF8_STRING
 	bool plain; // text/plain, TEXT or STRING
+	bool uri_list; // text/uri-list: files, when it is a drag
 }
 
 struct DataDeviceListener
@@ -83,7 +84,7 @@ struct DataSourceListener
 	void* action;
 }
 
-DataDeviceListener dataDeviceListener = { &ddDataOffer, &ddEnter, &ddLeave, &noop, &ddDrop, &ddSelection };
+DataDeviceListener dataDeviceListener = { &ddDataOffer, &ddEnter, &ddLeave, &ddMotion, &ddDrop, &ddSelection };
 DataOfferListener dataOfferListener = { &offerMime, &noop, &noop };
 DataSourceListener dataSourceListener = { &noop, &sourceSend, &sourceCancelled, &noop, &noop, &noop };
 
@@ -110,14 +111,24 @@ fn void offerMime(ClipOffer* state, Proxy offer, char* mime) @private
 	String name = ((ZString)mime).str_view();
 	if (name == "text/plain;charset=utf-8" || name == "UTF8_STRING") state.utf8 = true;
 	if (name == "text/plain" || name == "TEXT" || name == "STRING") state.plain = true;
+	if (name == "text/uri-list") state.uri_list = true;
 }
 
-// A drag entering the window. Nothing is dropped here yet, so the offer is
-// only held until the drag leaves or drops.
+// A drag entering the window. Its offer is held until the drag leaves or
+// drops, and a list of files is accepted (see drop.c3).
 fn void ddEnter(WaylandWindow* self, Proxy device, uint serial, Surface surface, int x, int y, Proxy offer) @private
 {
 	clip_offer_free(self.dnd_offer);
 	self.dnd_offer = offer != null ? (ClipOffer*)proxy_get_user_data(offer) : null;
+	// The pointer belongs to the drag while it lasts, so wl_pointer says
+	// nothing: this is where the cursor is.
+	self.mouse_pos = { (float)fixed_to_double(x), (float)fixed_to_double(y) };
+	wayland_drop_enter(self, serial);
+}
+
+fn void ddMotion(WaylandWindow* self, Proxy device, uint time, int x, int y) @private
+{
+	self.mouse_pos = { (float)fixed_to_double(x), (float)fixed_to_double(y) };
 }
 
 fn void ddLeave(WaylandWindow* self, Proxy device) @private
@@ -128,6 +139,7 @@ fn void ddLeave(WaylandWindow* self, Proxy device) @private
 
 fn void ddDrop(WaylandWindow* self, Proxy device) @private
 {
+	wayland_drop_receive(self, self.dnd_offer);
 	clip_offer_free(self.dnd_offer);
 	self.dnd_offer = null;
 }
@@ -260,6 +272,7 @@ fn void wayland_clipboard_free(WaylandWindow* self)
 	if (self.data_device_manager != null) proxy_destroy(self.data_device_manager);
 	self.data_device_manager = null;
 	self.clip_text.free();
+	self.drops.free();
 }
 
 // --- X11 ---------------------------------------------------------------------

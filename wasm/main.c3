@@ -349,3 +349,6 @@ fn void Window.set_clipboard(&self, String text)
 }
 
 fn String Window.get_clipboard(&self, Allocator alloc) => local_clipboard.copy(alloc);
+
+// Dropped files are not reported by this backend yet.
+fn String Window.take_drops(&self, Allocator alloc) => "".copy(alloc);

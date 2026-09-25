@@ -123,6 +123,9 @@ struct WaylandWindow
 	// The latest key, button or keyboard-enter serial: what `set_selection`
 	// has to name to be allowed.
 	uint input_serial;
+	// Files dropped on the window and not yet taken, a path per line (see
+	// drop.c3).
+	DString drops;
 }
 
 struct WLArray
@@ -783,6 +786,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 	window.display = display;
 	window.text = dstring::new(mem);
 	window.clip_text = dstring::new(mem);
+	window.drops = dstring::new(mem);
 	window.buffer_scale = 1;
 	// What was asked for, until the first configure answers. Everything below
 	// commits a buffer at this size, so it is what the window actually is for
