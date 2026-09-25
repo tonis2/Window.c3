@@ -40,6 +40,17 @@ struct X11Window
 	// own atom rather than a reused one so the handler can tell a wake from a
 	// WM_DELETE_WINDOW without reading further into the message.
 	uint wake_atom;
+	// The clipboard (see clipboard.c3): its atoms, interned on first use; the
+	// text while this window owns the CLIPBOARD selection; and the events a
+	// paste read past while it waited for its answer, for the next poll.
+	uint atom_clipboard;
+	uint atom_utf8;
+	uint atom_targets;
+	uint atom_clip_property;
+	DString clip_text;
+	bool clip_owned;
+	KeyPressEvent*[64] stash;
+	int stash_count;
 	// The screen's root window. `_NET_WM_STATE` is a message to the root rather
 	// than to us — the window manager is the one acting on it.
 	uint root;
@@ -462,6 +473,7 @@ fn X11Window? x11_create(Params params, String name)
 		.height = (uint)params.height,
 		.shape_cursor = CursorShape.ARROW,
 		.text = dstring::new(mem),
+		.clip_text = dstring::new(mem),
 	};
 
 	x11_init_xkb(&response);
@@ -528,6 +540,9 @@ fn void x11_pollEvents(X11Window* self, bool wait = false)
 	self.scroll_delta_x = 0;
 	self.text.clear();
 	self.event_log.clear();
+
+	// What a paste read past, first, so the order holds.
+	x11_drain_stash(self);
 
 	// Push any queued requests to the server before we (possibly) block.
 	xcbFlush(self.connection);
@@ -608,6 +623,10 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 					self.height = (uint)moved.height;
 				}
 			}
+		case 29: // SelectionClear
+			x11_selection_clear(self, event);
+		case 30: // SelectionRequest
+			x11_selection_request(self, event);
 		case 33: // ClientMessage
 			{
 				ClientMessageEvent* msg = (ClientMessageEvent*)event;
@@ -992,6 +1011,9 @@ fn void x11_free(X11Window* self)
 {
 	if (self.blank_cursor != 0 && xFreeCursor != null) xFreeCursor(self.display, self.blank_cursor);
 	self.text.free();
+	self.clip_text.free();
+	for (int i = 0; i < self.stash_count; i++) free(self.stash[i]);
+	self.stash_count = 0;
 	xkb_free(self.xkb_context, self.xkb_keymap, self.xkb_state);
 	xcbDestroy(self.connection, self.window);
 	if (self.display) x_close_display(self.display);

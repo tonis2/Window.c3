@@ -109,6 +109,20 @@ struct WaylandWindow
 	Proxy relative_pointer; // the deltas that come with it
 	bool pointer_locked; // what the compositor confirmed, not what was asked for
 	double[<2>] relative_motion; // accumulated over the last poll, in logical units
+
+	// The clipboard (see clipboard.c3): the manager, this seat's data device,
+	// the offer the compositor says holds the selection, a drag's offer while
+	// one is over the window, and - while this window owns the selection - the
+	// source it answers from and the text.
+	Proxy data_device_manager;
+	Proxy data_device;
+	ClipOffer* selection_offer;
+	ClipOffer* dnd_offer;
+	Proxy clip_source;
+	DString clip_text;
+	// The latest key, button or keyboard-enter serial: what `set_selection`
+	// has to name to be allowed.
+	uint input_serial;
 }
 
 struct WLArray
@@ -219,6 +233,7 @@ alias FnWlDisplayPrepareRead = fn int(Display display);
 alias FnWlDisplayReadEvents = fn int(Display display);
 alias FnWlDisplayCancelRead = fn void(Display display);
 alias FnWlDisplayGetFd = fn int(Display display);
+alias FnWlProxyGetUserData = fn void*(Proxy proxy);
 
 // poll() from libc
 struct PollFd
@@ -254,6 +269,7 @@ FnWlDisplayPrepareRead prepare_read;
 FnWlDisplayReadEvents read_events;
 FnWlDisplayCancelRead cancel_read;
 FnWlDisplayGetFd display_get_fd;
+FnWlProxyGetUserData proxy_get_user_data;
 
 // Interface pointers loaded at runtime via dlsym
 Interface* wl_registry_interface;
@@ -268,6 +284,10 @@ Interface* wl_pointer_interface;
 Interface* wl_shm_interface;
 Interface* wl_shm_pool_interface;
 Interface* wl_buffer_interface;
+Interface* wl_data_device_manager_interface;
+Interface* wl_data_device_interface;
+Interface* wl_data_source_interface;
+Interface* wl_data_offer_interface;
 
 // POSIX syscalls for shared memory
 extern fn int memfd_create(char* name, uint flags) @cname("memfd_create");
@@ -307,6 +327,7 @@ fn bool wayland_load()
 	read_events = (FnWlDisplayReadEvents)dlsym(_wl_lib, "wl_display_read_events");
 	cancel_read = (FnWlDisplayCancelRead)dlsym(_wl_lib, "wl_display_cancel_read");
 	display_get_fd = (FnWlDisplayGetFd)dlsym(_wl_lib, "wl_display_get_fd");
+	proxy_get_user_data = (FnWlProxyGetUserData)dlsym(_wl_lib, "wl_proxy_get_user_data");
 
 	// Load interface structs (dlsym returns pointer to the Interface)
 	wl_registry_interface = (Interface*)dlsym(_wl_lib, "wl_registry_interface");
@@ -321,6 +342,10 @@ fn bool wayland_load()
 	wl_shm_interface = (Interface*)dlsym(_wl_lib, "wl_shm_interface");
 	wl_shm_pool_interface = (Interface*)dlsym(_wl_lib, "wl_shm_pool_interface");
 	wl_buffer_interface = (Interface*)dlsym(_wl_lib, "wl_buffer_interface");
+	wl_data_device_manager_interface = (Interface*)dlsym(_wl_lib, "wl_data_device_manager_interface");
+	wl_data_device_interface = (Interface*)dlsym(_wl_lib, "wl_data_device_interface");
+	wl_data_source_interface = (Interface*)dlsym(_wl_lib, "wl_data_source_interface");
+	wl_data_offer_interface = (Interface*)dlsym(_wl_lib, "wl_data_offer_interface");
 
 	// Patch xdg_shell protocol type arrays with loaded interface pointers
 	get_xdg_surface[1] = wl_surface_interface;
@@ -500,6 +525,7 @@ fn void kbMap(WaylandWindow* data, Keyboard kb, uint frmt, int fd, uint size)
 }
 fn void kbEnter(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLArray* keys)
 {
+	data.input_serial = ser;
 }
 fn void kbLeave(WaylandWindow* data, Keyboard kb, uint ser, Surface surface)
 {
@@ -510,6 +536,7 @@ fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, voi
 
 fn void kbKey(WaylandWindow* data, void* kb, uint serial, uint type, uint key, uint state)
 {
+	data.input_serial = serial;
 	// Wayland reports the raw evdev keycode; the unified tables use the X11
 	// convention (evdev + 8).
 	uint scancode = key + 8;
@@ -567,6 +594,7 @@ fn void pointerMotion(WaylandWindow* data, Pointer pointer, uint time, int x, in
 
 fn void pointerButton(WaylandWindow* data, Pointer pointer, int serial, uint time, uint button, uint state)
 {
+	data.input_serial = (uint)serial;
 	// Left mouse button
 	if (button == 272)
 	{
@@ -660,6 +688,12 @@ fn void handleRegistry(WaylandWindow* window, Registry registry, int name, char*
 		proxy_add_listener(window.seat, &seatListener, window);
 	}
 
+	if (action_name == "wl_data_device_manager" && wl_data_device_manager_interface != null)
+	{
+		// v3 is the newest the listeners in clipboard.c3 cover.
+		window.data_device_manager = registry_bind(registry, wl_data_device_manager_interface, name, version > 3 ? 3 : version);
+	}
+
 	if (action_name == "wp_cursor_shape_manager_v1")
 	{
 		window.cursor_shape_manager = registry_bind(registry, &wp_cursor_shape_manager_v1_interface, name, 1);
@@ -748,6 +782,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 	window.display = display;
 	window.text = dstring::new(mem);
+	window.clip_text = dstring::new(mem);
 	window.buffer_scale = 1;
 	// What was asked for, until the first configure answers. Everything below
 	// commits a buffer at this size, so it is what the window actually is for
@@ -778,6 +813,7 @@ fn void? wayland_create(WaylandWindow* window, Params params, String name)
 
 	assert(window.surface);
 	assert(window.shell);
+	wayland_clipboard_init(window);
 	if (window.viewporter != null)
 	{
 		window.viewport = proxy_marshal_flags(window.viewporter, 1, &wp_viewport_interface,
@@ -1562,6 +1598,7 @@ fn void wayland_free(WaylandWindow* self)
 		proxy_get_version(self.pointer_constraints),
 		WL_MARSHAL_FLAG_DESTROY
 	);
+	wayland_clipboard_free(self);
 	if (self.wake_read >= 0) close_fd(self.wake_read);
 	if (self.wake_write >= 0) close_fd(self.wake_write);
 	self.text.free();

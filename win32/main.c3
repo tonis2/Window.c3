@@ -1140,3 +1140,15 @@ fn void Window.keep_pointer_centred(&self, bool force = false)
 	// two coordinate systems to disagree.
 	self.src.has_last = false;
 }
+
+// The clipboard, kept inside this process: this backend does not reach the
+// system's yet, so a copy is only pasteable here.
+String local_clipboard @private;
+
+fn void Window.set_clipboard(&self, String text)
+{
+	if (local_clipboard.ptr != null) local_clipboard.free(mem);
+	local_clipboard = text.copy(mem);
+}
+
+fn String Window.get_clipboard(&self, Allocator alloc) => local_clipboard.copy(alloc);
