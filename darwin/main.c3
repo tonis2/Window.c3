@@ -709,6 +709,17 @@ fn bool Window.fullscreen(&self)
 }
 
 <*
+ Fill the screen's usable area with the chrome kept: `[NSWindow zoom:]`, the
+ green button's alt-click and the title bar's double-click. It is a toggle, so
+ the state is read first and a window that is already zoomed is left alone.
+*>
+fn void Window.maximize(&self)
+{
+	if (objc::msg_send(self.src.window.id, GetBool, "isZoomed") != 0) return;
+	objc::msg_send(self.src.window.id, SendPtr, "zoom:", null);
+}
+
+<*
  Enter or leave fullscreen.
 
  AppKit has a toggle and no setter, so the current state is read first and the
@@ -720,17 +731,6 @@ fn bool Window.fullscreen(&self)
  follows is a resize, which reaches the swapchain exactly as a dragged corner
  does.
 *>
-<*
- Fill the screen's usable area with the chrome kept: `[NSWindow zoom:]`, the
- green button's alt-click and the title bar's double-click. It is a toggle, so
- the state is read first and a window that is already zoomed is left alone.
-*>
-fn void Window.maximize(&self)
-{
-	if (objc::msg_send(self.src.window.id, GetBool, "isZoomed") != 0) return;
-	objc::msg_send(self.src.window.id, SendPtr, "zoom:", null);
-}
-
 fn void Window.set_fullscreen(&self, bool on)
 {
 	if (self.fullscreen() == on) return;

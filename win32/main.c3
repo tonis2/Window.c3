@@ -871,6 +871,15 @@ fn bool Window.fullscreen(&self)
 }
 
 <*
+ Fill the work area with the chrome kept — the title bar's maximise button.
+*>
+fn void Window.maximize(&self)
+{
+	if (self.src.hwnd == null) return;
+	showWindow(self.src.hwnd, SW_MAXIMIZE);
+}
+
+<*
  Enter or leave borderless fullscreen.
 
  Borderless over the monitor's rect rather than an exclusive mode change: the
@@ -880,15 +889,6 @@ fn bool Window.fullscreen(&self)
  target over whatever the window became — so an exclusive mode would buy the
  picture nothing.
 *>
-<*
- Fill the work area with the chrome kept — the title bar's maximise button.
-*>
-fn void Window.maximize(&self)
-{
-	if (self.src.hwnd == null) return;
-	showWindow(self.src.hwnd, SW_MAXIMIZE);
-}
-
 fn void Window.set_fullscreen(&self, bool on)
 {
 	if (self.src.hwnd == null || self.src.is_fullscreen == on) return;
