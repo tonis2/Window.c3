@@ -298,6 +298,13 @@ fn void Window.set_fullscreen(&self, bool on)
 }
 
 <*
+ A no-op: the canvas is sized by the page.
+*>
+fn void Window.maximize(&self)
+{
+}
+
+<*
  A no-op, and it cannot be anything else: a page cannot minimise the browser it
  is running in, and nothing in the DOM corresponds to an iconified window.
  Present so that code written against `c3w` still compiles for wasm.

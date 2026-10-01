@@ -809,6 +809,42 @@ fn void x11_set_fullscreen(X11Window* self, bool on)
 
 fn bool x11_fullscreen(X11Window* self) => self.is_fullscreen;
 
+<*
+ Ask the window manager to maximise the window: `_NET_WM_STATE` ADD with both
+ the vertical and horizontal atoms, the same client message as fullscreen's. A
+ request; a manager may refuse, and a bare session with none does nothing.
+*>
+fn void x11_maximize(X11Window* self)
+{
+	if (self.connection == null || xcbSendEvent == null || self.root == 0) return;
+
+	uint state = x11_intern_atom(self.connection, "_NET_WM_STATE");
+	uint vert  = x11_intern_atom(self.connection, "_NET_WM_STATE_MAXIMIZED_VERT");
+	uint horz  = x11_intern_atom(self.connection, "_NET_WM_STATE_MAXIMIZED_HORZ");
+	if (state == 0 || vert == 0 || horz == 0) return;
+
+	char[32] message;
+	WmStateEvent* ask = (WmStateEvent*)&message;
+	ask.response_type = 33; // ClientMessage
+	ask.format = 32;
+	ask.window = (uint)(uptr)self.window;
+	ask.type = state;
+	ask.data0 = 1; // _NET_WM_STATE_ADD
+	ask.data1 = vert;
+	ask.data2 = horz;
+	ask.data3 = 1; // a normal application
+	ask.data4 = 0;
+
+	xcbSendEvent(
+		self.connection,
+		0,
+		(XCB_Window)(uptr)self.root,
+		XcbEventMask.EVENT_MASK_SUBSTRUCTURE_REDIRECT.value | XcbEventMask.EVENT_MASK_SUBSTRUCTURE_NOTIFY.value,
+		&message
+	);
+	xcbFlush(self.connection);
+}
+
 fn float x11_get_scroll(X11Window* self) => (float)self.scroll_delta;
 fn float x11_get_scroll_x(X11Window* self) => (float)self.scroll_delta_x;
 

@@ -39,6 +39,7 @@ const uint CS_OWNDC   = 0x0020;
 // ShowWindow commands
 const int SW_SHOW     = 5;
 const int SW_HIDE     = 0;
+const int SW_MAXIMIZE = 3;
 const int SW_MINIMIZE = 6;
 const int SW_RESTORE  = 9;
 
@@ -879,6 +880,15 @@ fn bool Window.fullscreen(&self)
  target over whatever the window became — so an exclusive mode would buy the
  picture nothing.
 *>
+<*
+ Fill the work area with the chrome kept — the title bar's maximise button.
+*>
+fn void Window.maximize(&self)
+{
+	if (self.src.hwnd == null) return;
+	showWindow(self.src.hwnd, SW_MAXIMIZE);
+}
+
 fn void Window.set_fullscreen(&self, bool on)
 {
 	if (self.src.hwnd == null || self.src.is_fullscreen == on) return;

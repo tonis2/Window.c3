@@ -1459,6 +1459,17 @@ fn void wayland_set_fullscreen(WaylandWindow* self, bool on)
 
 fn bool wayland_fullscreen(WaylandWindow* self) => self.is_fullscreen;
 
+<*
+ Ask the compositor to maximise the window: `xdg_toplevel.set_maximized`, opcode
+ 9, no arguments. A request like fullscreen's; the size follows as a `configure`.
+*>
+fn void wayland_maximize(WaylandWindow* self)
+{
+	if (self.top_level == null || proxy_marshal_flags == null) return;
+	proxy_marshal_flags(self.top_level, 9, null, proxy_get_version(self.top_level), 0);
+	surface_commit(self.surface);
+}
+
 fn void wayland_set_cursor(WaylandWindow* self, CursorShape shape)
 {
 	// No-op when the compositor lacks cursor-shape-v1 or the pointer has never

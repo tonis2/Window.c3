@@ -649,6 +649,21 @@ fn void Window.set_fullscreen(&self, bool on)
 }
 
 <*
+ Fill the display's work area with the normal window chrome kept — what the
+ title bar's maximise button does. A request, answered on a later frame like
+ `set_fullscreen`'s.
+*>
+fn void Window.maximize(&self)
+{
+	switch (self.src.backend)
+	{
+		case WAYLAND: wayland_maximize((WaylandWindow*)self.src.backend_data);
+		case X11:     x11_maximize((X11Window*)self.src.backend_data);
+		default:      break;
+	}
+}
+
+<*
  Minimise the window, or restore it.
 
  **Restoring works on X11 and not on Wayland.** xdg-shell has a `set_minimized`
