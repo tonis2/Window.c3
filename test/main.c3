@@ -12,7 +12,7 @@ fn void main(String[] args)
 	{
 		c3w::EventMap event_map = win.getEvent();
 
-		if (event_map.is_pressed(ESCAPE))
+		if (event_map.is_pressed(ESCAPE) || win.should_close())
 		{
 			running = false;
 		}
