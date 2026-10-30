@@ -3,8 +3,8 @@ import std::math;
 import std::io;
 import std::core::types;
 import std::core::runtime;
-import std::os::macos::objc;
-import std::os::macos::objc::ns;
+import std::os::darwin, std::os::darwin::objc;
+import std::os::macos;
 
 struct DarwinWindow
 {
@@ -36,10 +36,9 @@ struct DarwinWindow
 // One flag for the process — c3w manages a single window.
 bool close_requested = false;
 
-fn bool on_close(ObjcId self)
+fn bool on_close(ObjId self)
 {
 	close_requested = true;
-	if (catch self.get_ivar("NSWindow")) return true;
 	return true;
 }
 
@@ -60,21 +59,20 @@ fn bool on_close(ObjcId self)
  The selector is the second argument because that is how an Objective-C method
  is called; both are unused, and are named for the reader.
 *>
-fn void swallow_key(ObjcId self, ObjcSelector cmd, NSEvent event) @local
+fn void swallow_key(ObjId self, ObjSel cmd, NSEvent event) @local
 {
 }
 
 // -[NSView acceptsFirstResponder]. NO on a plain NSView, which is what leaves
 // the window first responder and every keystroke unhandled. Objective-C BOOL is
 // a signed char — see the GetBool note in objc.c3.
-fn char accepts_first_responder(ObjcId self, ObjcSelector cmd) @local => 1;
+fn char accepts_first_responder(ObjId self, ObjSel cmd) @local => 1;
 
 // windowWillResize:toSize: — accept whatever size the drag proposes. Nothing is
 // recorded here: AppKit calls this many times a second for the whole of a live
 // resize, and the host reads the size it settled on off the surface instead.
-fn NSSize resize_window(ObjcId self, NSSize frame)
+fn NSSize resize_window(ObjId self, NSSize frame)
 {
-	if (catch self.get_ivar("NSWindow")) return frame;
 	return frame;
 }
 
@@ -117,7 +115,7 @@ fn Window? new(Params params, String name)
 	delegate.setInstanceVariable("NSWindow", win);
 	win.setDelegate(delegate);
 
-	win.makeKeyAndOrderFront((ObjcSelector)null);
+	win.makeKeyAndOrderFront((ObjSel)null);
 	win.setIsVisible(true);
 
 	app.activateIgnoringOtherApps(true);
@@ -469,7 +467,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 *>
 fn void release_unheld_mouse_buttons(EventMap* map) @local
 {
-	ObjcClass cls = objc::getClass("NSEvent");
+	ObjClass cls = objc::getClass("NSEvent");
 	if (!(void*)cls) return;
 
 	// Bit 0 is the left button, bit 1 the right, bit 2 the first "other" —
@@ -515,18 +513,18 @@ fn float Window.get_scale(&self) => (float)self.src.window.backing_scale_factor(
 
 fn void Window.set_cursor(&self, CursorShape shape)
 {
-	ObjcClass cls = objc::getClass("NSCursor");
-	void* cursor;
+	ObjClass cls = objc::getClass("NSCursor");
+	ObjId cursor;
 	switch (shape)
 	{
-		case ARROW:         cursor = objc::msg_send(cls, SendVoid, "arrowCursor");
-		case POINTING_HAND: cursor = objc::msg_send(cls, SendVoid, "pointingHandCursor");
-		case IBEAM:         cursor = objc::msg_send(cls, SendVoid, "IBeamCursor");
-		case CROSSHAIR:     cursor = objc::msg_send(cls, SendVoid, "crosshairCursor");
-		case OPEN_HAND:     cursor = objc::msg_send(cls, SendVoid, "openHandCursor");
-		case CLOSED_HAND:   cursor = objc::msg_send(cls, SendVoid, "closedHandCursor");
-		case RESIZE_H:      cursor = objc::msg_send(cls, SendVoid, "resizeLeftRightCursor");
-		case RESIZE_V:      cursor = objc::msg_send(cls, SendVoid, "resizeUpDownCursor");
+		case ARROW:         cursor = objc::msg_send(cls, GetPtr, "arrowCursor");
+		case POINTING_HAND: cursor = objc::msg_send(cls, GetPtr, "pointingHandCursor");
+		case IBEAM:         cursor = objc::msg_send(cls, GetPtr, "IBeamCursor");
+		case CROSSHAIR:     cursor = objc::msg_send(cls, GetPtr, "crosshairCursor");
+		case OPEN_HAND:     cursor = objc::msg_send(cls, GetPtr, "openHandCursor");
+		case CLOSED_HAND:   cursor = objc::msg_send(cls, GetPtr, "closedHandCursor");
+		case RESIZE_H:      cursor = objc::msg_send(cls, GetPtr, "resizeLeftRightCursor");
+		case RESIZE_V:      cursor = objc::msg_send(cls, GetPtr, "resizeUpDownCursor");
 	}
 	if (cursor) objc::msg_send(cursor, SendVoid, "set");
 }
@@ -584,7 +582,7 @@ fn void Window.setPointerLock(&self, bool locked)
 	if (locked == self.src.pointer_locked) return;
 	self.src.pointer_locked = locked;
 
-	ObjcClass cursor = objc::getClass("NSCursor");
+	ObjClass cursor = objc::getClass("NSCursor");
 	if (locked)
 	{
 		// Zero, once per lock. Deprecated since 10.6 and still the only way to
@@ -826,7 +824,7 @@ fn VkSurface? Window.create_vk_surface(&self, void* vk_instance, VkGetInstancePr
 		.sType = 1000217000,
 		.pNext = null,
 		.flags = 0,
-		.pLayer = self.src.layer.id,
+		.pLayer = (void*)self.src.layer.id,
 	};
 
 	void* surface;

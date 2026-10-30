@@ -1,58 +1,58 @@
 module c3w @feat(DARWIN);
-import std::os::macos::objc;
-import std::os::macos::objc::ns;
+import std::os::darwin, std::os::darwin::objc;
+import std::os::macos;
 import std::io;
 import std::math;
 
 
-alias SendBool = fn void*(void*, ObjcSelector, bool);
-alias SendContentRec = fn void*(void*, ObjcSelector, NSRect, long, long, bool);
-alias SendDequeueEvent = fn void*(void*, ObjcSelector, long, void*, ObjcId, bool);
-alias SendDouble = fn void*(void*, ObjcSelector, double);
-alias SendEvent = fn void*(void*, ObjcSelector, NSEvent);
-alias SendId = fn void*(void*, ObjcSelector, ObjcId);
-alias SendIdId = fn void*(void*, ObjcSelector, ObjcId, ObjcId);
-alias SendInt = fn void*(void*, ObjcSelector, int);
-alias SendPtr = fn void*(void*, ObjcSelector, void*);
-alias SendSelector = fn void*(void*, ObjcSelector, ObjcSelector);
-alias SendSize = fn void*(void*, ObjcSelector, NSSize);
+alias SendBool = fn ObjId(ObjId, ObjSel, bool);
+alias SendContentRec = fn ObjId(ObjId, ObjSel, NSRect, long, long, bool);
+alias SendDequeueEvent = fn ObjId(ObjId, ObjSel, long, ObjId, ObjId, bool);
+alias SendDouble = fn ObjId(ObjId, ObjSel, double);
+alias SendEvent = fn ObjId(ObjId, ObjSel, NSEvent);
+alias SendId = fn ObjId(ObjId, ObjSel, ObjId);
+alias SendIdId = fn ObjId(ObjId, ObjSel, ObjId, ObjId);
+alias SendInt = fn ObjId(ObjId, ObjSel, int);
+alias SendPtr = fn ObjId(ObjId, ObjSel, void*);
+alias SendSelector = fn ObjId(ObjId, ObjSel, ObjSel);
+alias SendSize = fn ObjId(ObjId, ObjSel, NSSize);
 // -[NSWindow setFrame:display:]. NSRect rides in the float registers as an HFA,
 // the same way it does in SendContentRec.
-alias SendRectBool = fn void*(void*, ObjcSelector, NSRect, bool);
+alias SendRectBool = fn ObjId(ObjId, ObjSel, NSRect, bool);
 // -[NSView initWithFrame:]. Same HFA rule for the NSRect.
-alias SendRect = fn void*(void*, ObjcSelector, NSRect);
-alias SendString = fn void*(void*, ObjcSelector, ZString);
-alias SendPostEvent = fn void*(void*, ObjcSelector, NSEvent, bool);
+alias SendRect = fn ObjId(ObjId, ObjSel, NSRect);
+alias SendString = fn ObjId(ObjId, ObjSel, ZString);
+alias SendPostEvent = fn ObjId(ObjId, ObjSel, NSEvent, bool);
 // +[NSEvent otherEventWithType:location:modifierFlags:timestamp:windowNumber:
 //  context:subtype:data1:data2:] — the one NSEvent constructor that takes no
 //  hardware state, and so the only one an application can make up out of thin
 //  air. NSPoint rides in the float registers as an HFA, the same way NSRect
 //  does in SendContentRec.
-alias SendOtherEvent = fn void*(void*, ObjcSelector, ulong, NSPoint, ulong, double, long, void*, short, long, long);
-alias GetInt = fn int(void*, ObjcSelector);
+alias SendOtherEvent = fn ObjId(ObjId, ObjSel, ulong, NSPoint, ulong, double, long, void*, short, long, long);
+alias GetInt = fn int(ObjId, ObjSel);
 // +[NSEvent pressedMouseButtons] returns an NSUInteger, which is 64 bits wide
 // on every Mac this builds for. Reading it back as an int would work by luck —
 // the flags that matter live in the low three bits — and stop working the day
 // anything above bit 31 is ever set.
-alias GetULong = fn ulong(void*, ObjcSelector);
-alias GetDouble = fn double(void*, ObjcSelector);
+alias GetULong = fn ulong(ObjId, ObjSel);
+alias GetDouble = fn double(ObjId, ObjSel);
 // Objective-C BOOL is a signed char, so only the low byte of the return
 // register is defined — reading one back as an int picks up whatever was in the
 // rest of it. Same family of arm64 return-ABI trap as get_scrolling_delta below.
-alias GetBool = fn char(void*, ObjcSelector);
-// alias GetView = fn NSView(void*, ObjcSelector);
-alias GetRect = fn NSRect(void*, ObjcSelector);
-alias GetCharacters = fn NSString(void*, ObjcSelector);
-alias GetPoint = fn NSPoint(void*, ObjcSelector);
-alias GetID = fn ObjcId*(void*, ObjcSelector);
-alias GetPtr = fn void*(void*, ObjcSelector);
+alias GetBool = fn char(ObjId, ObjSel);
+// alias GetView = fn NSView(ObjId, ObjSel);
+alias GetRect = fn NSRect(ObjId, ObjSel);
+alias GetCharacters = fn NSString(ObjId, ObjSel);
+alias GetPoint = fn NSPoint(ObjId, ObjSel);
+alias GetID = fn ObjId(ObjId, ObjSel);
+alias GetPtr = fn ObjId(ObjId, ObjSel);
 
-faultdef IVAR_NOT_SET, IVAR_NOT_FOUND, METHOD_NOT_SET;
+faultdef IVAR_NOT_SET, METHOD_NOT_SET;
 
 struct NSObject
 {
-	ObjcClass cls;
-	ObjcId* id;
+	ObjClass cls;
+	ObjId id;
 }
 
 alias NSApplication = NSObject;
@@ -80,10 +80,10 @@ fn NSObject new_object(ZString cls_name = "NSObject")
 
 macro NSObject.call(&self, $FunctionType, ZString $selector, ...)
 {
-	return (($FunctionType)&objc::msgSend)((ObjcId)self.id, objc::sel_getUid($selector), $vasplat);
+	return (($FunctionType)&objc::msgSend)((ObjId)self.id, objc::sel_getUid($selector), $vasplat);
 }
 
-macro ObjcId.call(ObjcId self, $FunctionType, ZString $selector, ...)
+macro ObjId.call(ObjId self, $FunctionType, ZString $selector, ...)
 {
 	return (($FunctionType)&objc::msgSend)(self, objc::sel_getUid($selector), $vasplat);
 }
@@ -95,7 +95,7 @@ fn void NSObject.alloc_class_pair(&self, ZString name, uint extra_bytes)
 
 fn void NSApplication.sharedApplication(&self)
 {
-	self.id = objc::msg_send(self.cls, SendVoid, "sharedApplication");
+	self.id = objc::msg_send(self.cls, GetPtr, "sharedApplication");
 }
 
 fn void NSApplication.setDelegate(&self, NSObject delegate)
@@ -204,7 +204,7 @@ fn void NSImage.setSize(&self, NSSize size)
 
 fn void NSObject.init(&self)
 {
-	self.id = objc::msg_send(self.id, SendVoid, "init");
+	self.id = objc::msg_send(self.id, GetPtr, "init");
 }
 
 fn void NSValue.valueWithPointer(&self, void* ptr)
@@ -219,12 +219,12 @@ fn void NSString.stringWithUTF8String(&self, ZString str)
 
 fn void NSDate.distantFuture(&self)
 {
-	self.id = objc::msg_send(self.cls, SendVoid, "distantFuture");
+	self.id = objc::msg_send(self.cls, GetPtr, "distantFuture");
 }
 
 fn void NSDate.distantPast(&self)
 {
-	self.id = objc::msg_send(self.cls, SendVoid, "distantPast");
+	self.id = objc::msg_send(self.cls, GetPtr, "distantPast");
 }
 
 
@@ -241,7 +241,7 @@ fn void NSWindow.initWithContentRect(&self, NSRect rect, ulong style_mask, ulong
 	);
 }
 
-fn void NSWindow.makeKeyAndOrderFront(&self, ObjcSelector sel)
+fn void NSWindow.makeKeyAndOrderFront(&self, ObjSel sel)
 {
 	objc::msg_send(self.id, SendSelector, "makeKeyAndOrderFront:", sel);
 }
@@ -253,7 +253,7 @@ fn void NSWindow.setIsVisible(&self, bool flag)
 
 fn void NSObject.alloc(&self)
 {
-	self.id = objc::msg_send(self.cls, SendVoid, "alloc");
+	self.id = objc::msg_send(self.cls, GetPtr, "alloc");
 }
 
 
@@ -268,20 +268,11 @@ macro NSObject? NSObject.add_method(NSObject self, ZString name, void* imp, ZStr
 	return self;
 }
 
-macro ObjcClass? ObjcClass.add_method(ObjcClass self, ZString name, void* imp, ZString types = "")
-{
-	if (!objc::class_addMethod(self, register_name(name), imp, types)) return METHOD_NOT_SET~;
-	return self;
-}
-
-// The std binding of class_addIvar (std::os::macos::objc) mistypes alignment
-// as double: the real C signature is uint8_t. The double rides in a float
-// register while the callee reads the integer registers, so the ivar gets
-// registered with the LOW BYTE OF THE TYPES POINTER as its log2 alignment and
-// a garbage types pointer — whenever the linker happens to place the types
-// string at an address whose low byte is >= 31, the ivar offset overflows to
-// 2^31 and the next setInstanceVariable crashes. Correctly-typed binding:
-extern fn bool class_add_ivar(ObjcClass cls, ZString name, usz size, char alignment, ZString types) @cname("class_addIvar");
+// The std binding of class_addIvar (std::os::darwin::objc) types size as int:
+// the real C signature is size_t. On arm64 the upper half of a 32-bit argument
+// register is undefined, so the runtime would read whatever was left there as
+// the ivar's size. Correctly-typed binding:
+extern fn bool class_add_ivar(ObjClass cls, ZString name, usz size, char alignment, ZString types) @cname("class_addIvar");
 
 macro NSObject? NSObject.add_ivar(NSObject self, ZString name, usz size, char alignment, ZString types)
 {
@@ -289,16 +280,9 @@ macro NSObject? NSObject.add_ivar(NSObject self, ZString name, usz size, char al
 	return self;
 }
 
-macro ObjcIvar? ObjcId.get_ivar(ObjcId self, ZString name)
-{
-	ObjcIvar out;
-	if (!objc::getInstanceVariable(self, name, &out)) return IVAR_NOT_FOUND~;
-	return out;
-}
-
 macro void NSObject.setInstanceVariable(NSObject self, ZString name, NSObject out)
 {
-	objc::setInstanceVariable(self.id, name, out.id);
+	objc::object_setInstanceVariable(self.id, name, (void*)out.id);
 }
 
 fn NSPoint NSEvent.locationInWindow(self) => objc::msg_send(self, GetPoint, "locationInWindow");
@@ -355,7 +339,7 @@ fn bool NSEvent.has_precise_scrolling_deltas(self)
 // get_characters does) scrambles the fields on arm64.
 fn ZString NSEvent.get_characters_utf8(self)
 {
-	void* chars = objc::msg_send(self, GetPtr, "characters");
+	ObjId chars = objc::msg_send(self, GetPtr, "characters");
 	if (!chars) return "";
 	return (ZString)objc::msg_send(chars, GetPtr, "UTF8String");
 }
