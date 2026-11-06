@@ -105,6 +105,7 @@ alias FnXcbQueryPointer = fn uint(Connection, XCB_Window);
 alias FnXcbQueryPointerReply = fn KeyPressEvent*(Connection, uint, void*);
 alias FnXcbDestroyWindow = fn uint(Connection, XCB_Window);
 alias FnXcbDisconnect = fn uint(Connection);
+alias FnXcbConnectionHasError = fn int(Connection);
 alias FnXcbCreateWindow = fn uint(
 	Connection,
 	char,
@@ -239,6 +240,7 @@ FnXcbQueryPointer xcbQueryPointer;
 FnXcbQueryPointerReply xcbQueryPointerReply;
 FnXcbDestroyWindow xcbDestroy;
 FnXcbDisconnect xcbDisconnect;
+FnXcbConnectionHasError xcbConnectionHasError;
 FnXcbCreateWindow createWindow;
 FnXcbInternAtom xcbInternAtom;
 FnXcbInternAtomReply xcbInternAtomReply;
@@ -289,6 +291,7 @@ fn bool x11_load()
 	xcbQueryPointerReply = (FnXcbQueryPointerReply)dlsym(_xcb_lib, "xcb_query_pointer_reply");
 	xcbDestroy = (FnXcbDestroyWindow)dlsym(_xcb_lib, "xcb_destroy_window");
 	xcbDisconnect = (FnXcbDisconnect)dlsym(_xcb_lib, "xcb_disconnect");
+	xcbConnectionHasError = (FnXcbConnectionHasError)dlsym(_xcb_lib, "xcb_connection_has_error");
 	createWindow = (FnXcbCreateWindow)dlsym(_xcb_lib, "xcb_create_window");
 	xcbInternAtom = (FnXcbInternAtom)dlsym(_xcb_lib, "xcb_intern_atom");
 	xcbInternAtomReply = (FnXcbInternAtomReply)dlsym(_xcb_lib, "xcb_intern_atom_reply");
@@ -577,6 +580,14 @@ fn void x11_pollEvents(X11Window* self, bool wait = false)
 
 		x11_handleEvent(self, event);
 		free(event);
+	}
+
+	// A server that is gone sends nothing more, not even a close. Closed, so the
+	// app can stop: every wait answers at once from here, which would spin.
+	if (!self.close_requested && xcbConnectionHasError(self.connection) != 0)
+	{
+		io::eprintn("window: lost the connection to the X server");
+		self.close_requested = true;
 	}
 }
 

@@ -229,6 +229,7 @@ alias FnWlProxyAddListener = fn int(Proxy registry, void* callback, void* data);
 alias FnWlProxyDestroy = fn void(Proxy proxy);
 alias FnWlProxyGetVersion = fn uint(Proxy proxy);
 alias FnWlDisplayDispatch = fn int(Display display);
+alias FnWlDisplayGetError = fn int(Display display);
 alias FnWlDisplayRoundtrip = fn int(Display display);
 alias FnWlDisplayDispatchPending = fn int(Display display);
 alias FnWlDisplayFlush = fn int(Display display);
@@ -246,6 +247,8 @@ struct PollFd
 	short revents;
 }
 const short POLLIN = 1;
+const short POLLERR = 8;
+const short POLLHUP = 16;
 extern fn int poll(PollFd* fds, uint nfds, int timeout) @cname("poll");
 
 // The wake pipe. Non-blocking on both ends so neither a wake with a full pipe
@@ -265,6 +268,7 @@ FnWlProxyAddListener proxy_add_listener;
 FnWlProxyDestroy proxy_destroy;
 FnWlProxyGetVersion proxy_get_version;
 FnWlDisplayDispatch dispatch;
+FnWlDisplayGetError get_error;
 FnWlDisplayRoundtrip rountrip;
 FnWlDisplayDispatchPending dispatch_pending;
 FnWlDisplayFlush display_flush;
@@ -323,6 +327,7 @@ fn bool wayland_load()
 	proxy_destroy = (FnWlProxyDestroy)dlsym(_wl_lib, "wl_proxy_destroy");
 	proxy_get_version = (FnWlProxyGetVersion)dlsym(_wl_lib, "wl_proxy_get_version");
 	dispatch = (FnWlDisplayDispatch)dlsym(_wl_lib, "wl_display_dispatch");
+	get_error = (FnWlDisplayGetError)dlsym(_wl_lib, "wl_display_get_error");
 	rountrip = (FnWlDisplayRoundtrip)dlsym(_wl_lib, "wl_display_roundtrip");
 	dispatch_pending = (FnWlDisplayDispatchPending)dlsym(_wl_lib, "wl_display_dispatch_pending");
 	display_flush = (FnWlDisplayFlush)dlsym(_wl_lib, "wl_display_flush");
@@ -1561,6 +1566,14 @@ fn void wayland_pollEvents(WaylandWindow* self, bool wait = false)
 	}
 
 	dispatch_pending(self.display);
+
+	// A compositor that is gone sends nothing more, not even a close. Closed, so
+	// the app can stop: left alone a parked poll would spin on the dead socket.
+	if (!self.close_requested && ((fds[0].revents & (POLLHUP | POLLERR)) != 0 || get_error(self.display) != 0))
+	{
+		io::eprintn("window: lost the connection to the compositor");
+		self.close_requested = true;
+	}
 }
 
 <*
