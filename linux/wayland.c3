@@ -532,6 +532,7 @@ fn void kbEnter(WaylandWindow* data, Keyboard kb, uint ser, Surface surface, WLA
 }
 fn void kbLeave(WaylandWindow* data, Keyboard kb, uint ser, Surface surface)
 {
+	data.event_map.release_keys(&data.event_log);
 }
 fn void noop(void* data, void* data1, void* data2, void* data3, void* data4, void* data5)
 {

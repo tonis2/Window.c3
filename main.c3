@@ -25,6 +25,40 @@ fn bool EventMap.is_pressed(self, EventKey key)
 	return item;
 }
 
+fn bool EventKey.is_mouse(self)
+{
+	switch (self)
+	{
+		case LEFT_MOUSE:
+		case RIGHT_MOUSE:
+		case MIDDLE_MOUSE:
+		case MOUSE_SCROLL_UP:
+		case MOUSE_SCROLL_DOWN:
+		case MOUSE_4:
+		case MOUSE_5:
+			return true;
+		default:
+			return false;
+	}
+}
+
+<*
+ Lets go of every held key, for a window that lost the keyboard: no release
+ follows, so a key held then would stay down. Mouse buttons stay; the pointer has
+ its own focus.
+
+ @param [&inout] log : `Receives a release for each key let go.`
+*>
+fn void EventMap.release_keys(&self, EventLog* log)
+{
+	foreach (key : EventKey::values)
+	{
+		if (key.is_mouse() || !self.is_pressed(key)) continue;
+		self.set(key, false);
+		log.push_key(key, false);
+	}
+}
+
 struct Event
 {
 	EventType type;

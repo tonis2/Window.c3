@@ -319,6 +319,7 @@ enum XcbEventMask : uint (uint value)
 	EVENT_MASK_POINTER_MOTION_HINT { 128 },
 	EVENT_MASK_STRUCTURE_NOTIFY    { 131072 },
 	EVENT_MASK_VISIBILITY_CHANGE   { 65536 },
+	EVENT_MASK_FOCUS_CHANGE        { 2097152 },
 	// The two the window manager selects on the root window. A `_NET_WM_STATE`
 	// message is addressed to the root and is meant for the manager, so it is
 	// sent with these rather than with a zero mask.
@@ -416,6 +417,7 @@ fn X11Window? x11_create(Params params, String name)
 			| XcbEventMask.EVENT_MASK_BUTTON_PRESS.value
 			| XcbEventMask.EVENT_MASK_BUTTON_RELEASE.value
 			| XcbEventMask.EVENT_MASK_POINTER_MOTION.value
+			| XcbEventMask.EVENT_MASK_FOCUS_CHANGE.value
 			// ConfigureNotify, and the whole of how this backend learns its own
 			// size. Without it the window is however big `Params` said forever.
 			| XcbEventMask.EVENT_MASK_STRUCTURE_NOTIFY.value
@@ -505,6 +507,19 @@ fn void x11_init_xkb(X11Window* self)
 	self.xkb_state = xkb_x11_state_new_from_device(self.xkb_keymap, self.connection, device);
 }
 
+// Keys that went up or down while another window had the keyboard never reached
+// the xkb state, so it is read again from the server.
+fn void x11_resync_xkb(X11Window* self) @private
+{
+	if (self.xkb_state == null) return;
+	int device = xkb_x11_get_core_keyboard_device_id(self.connection);
+	if (device == -1) return;
+	XkbState fresh = xkb_x11_state_new_from_device(self.xkb_keymap, self.connection, device);
+	if (fresh == null) return;
+	xkb_state_unref(self.xkb_state);
+	self.xkb_state = fresh;
+}
+
 // Interns an X atom by name, returning its id (0 on failure).
 fn uint x11_intern_atom(Connection connection, String name)
 {
@@ -565,7 +580,7 @@ fn void x11_pollEvents(X11Window* self, bool wait = false)
 	}
 }
 
-fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
+fn void x11_handleEvent(X11Window* self, KeyPressEvent* event)
 {
 	// The high bit of response_type marks synthetic (SendEvent) events; mask it.
 	uint type = (uint)event.type & 0x7f;
@@ -608,6 +623,10 @@ fn void x11_handleEvent(X11Window* self, KeyPressEvent* event) @private
 				}
 				if (self.xkb_state != null) xkb_state_update_key(self.xkb_state, keycode, XKB_KEY_UP);
 			}
+		case 9: // FocusIn
+			x11_resync_xkb(self);
+		case 10: // FocusOut
+			self.event_map.release_keys(&self.event_log);
 		case 4: // ButtonPress
 			x11_handleButton(self, (uint)event.value, true);
 		case 5: // ButtonRelease

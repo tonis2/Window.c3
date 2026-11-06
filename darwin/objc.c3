@@ -355,6 +355,7 @@ fn ulong NSWindow.style_mask(&self) => objc::msg_send(self.id, GetULong, "styleM
 // the state is read off the style mask and changed by asking for the change.
 fn void NSWindow.toggle_fullscreen(&self) => objc::msg_send(self.id, SendPtr, "toggleFullScreen:", null);
 fn double NSWindow.backing_scale_factor(&self) => objc::msg_send(self.id, GetDouble, "backingScaleFactor");
+fn bool NSWindow.is_key(&self) => objc::msg_send(self.id, GetBool, "isKeyWindow") != 0;
 fn void CALayer.set_contents_scale(&self, double scale) => objc::msg_send(self.id, SendDouble, "setContentsScale:", scale);
 
 // The selector here was "contentView" — the *getter*, sent with an argument the

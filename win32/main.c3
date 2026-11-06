@@ -21,6 +21,11 @@ const uint WM_MBUTTONUP   = 0x0208;
 const uint WM_MOUSEWHEEL  = 0x020A;
 const uint WM_MOUSEHWHEEL = 0x020E;
 const uint WM_CHAR        = 0x0102;
+const uint WM_KILLFOCUS   = 0x0008;
+const uint WM_SYSKEYDOWN  = 0x0104;
+const uint WM_SYSKEYUP    = 0x0105;
+const uint WM_SYSCOMMAND  = 0x0112;
+const uint SC_KEYMENU     = 0xF100;
 
 // One notch of a detented wheel. Windows reports rotation in multiples of this
 // so that a free-spinning wheel can send fractions of a notch; dividing by it
@@ -211,6 +216,9 @@ struct Win32Window
 	bool is_fullscreen;
 }
 
+// Set by `windowProc`, which has no window to write to; `getEvent` lets the keys go.
+bool keyboard_lost @local;
+
 // Window procedure callback
 fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @cname("c3w_window_proc")
 {
@@ -221,6 +229,13 @@ fn LResult windowProc(HWnd hwnd, uint msg, WParam wparam, LParam lparam) @cname(
 			return 0;
 		case WM_DESTROY:
 			return 0;
+		case WM_KILLFOCUS:
+			keyboard_lost = true;
+			return win32::defWindowProcW(hwnd, msg, wparam, lparam);
+		case WM_SYSCOMMAND:
+			// A tapped Alt would open the window menu and hold up the frames.
+			if (((uint)wparam & 0xFFF0) == SC_KEYMENU) return 0;
+			return win32::defWindowProcW(hwnd, msg, wparam, lparam);
 		default:
 			return win32::defWindowProcW(hwnd, msg, wparam, lparam);
 	}
@@ -413,7 +428,9 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				// this happened to exit on Escape — and cost that application
 				// the Escape key, which reads as held for the rest of the run.
 				self.src.close_requested = true;
+			// Alt, and any key held with it, comes as a system key.
 			case WM_KEYDOWN:
+			case WM_SYSKEYDOWN:
 				EventKey key = win32VkToEventKey((uint)msg.wParam);
 				if (key != EMPTY_KEY)
 				{
@@ -421,6 +438,7 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 					self.src.event_log.push_key(key, true);
 				}
 			case WM_KEYUP:
+			case WM_SYSKEYUP:
 				EventKey key = win32VkToEventKey((uint)msg.wParam);
 				if (key != EMPTY_KEY)
 				{
@@ -471,6 +489,12 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				self.src.mouse_pos = { (float)(msg.lParam & 0xFFFF), (float)((msg.lParam >> 16) & 0xFFFF) };
 			default:
 		}
+	}
+
+	if (keyboard_lost)
+	{
+		keyboard_lost = false;
+		self.src.event_map.release_keys(&self.src.event_log);
 	}
 
 	// After the drain, so the recentre's own WM_MOUSEMOVE lands in the next

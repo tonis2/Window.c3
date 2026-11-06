@@ -33,6 +33,11 @@ export function createC3WBridge(canvas) {
             eventQueue.push({ type: 2, code: e.keyCode, x: 0, y: 0 });
         });
 
+        // The keyup of a key held now goes to whatever took the keyboard
+        on(canvas, 'blur', () => {
+            eventQueue.push({ type: 7, code: 0, x: 0, y: 0 });
+        });
+
         // Mouse button events
         on(canvas, 'mousedown', (e) => {
             eventQueue.push({ type: 3, code: e.button, x: 0, y: 0 });

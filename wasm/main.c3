@@ -102,6 +102,8 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 				}
 			case 6: // mouse motion
 				self.src.mouse_pos = { event.mouse_x, event.mouse_y };
+			case 7: // the canvas lost the keyboard
+				self.src.event_map.release_keys(&self.src.event_log);
 			default:
 		}
 	}

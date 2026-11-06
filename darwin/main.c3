@@ -435,6 +435,8 @@ fn EventMap Window.getEvent(&self, bool wait = false)
 	}
 
 	release_unheld_mouse_buttons(&self.src.event_map);
+	// A held key reports no release once another window has the keyboard.
+	if (!self.src.window.is_key()) self.src.event_map.release_keys(&self.src.event_log);
 
 	// After the drain, so the warp's own motion event is not in this frame's
 	// deltas — it lands in the next call's queue, and by then the cursor is
