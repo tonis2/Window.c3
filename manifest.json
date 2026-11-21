@@ -1,6 +1,10 @@
 {
 	"provides": "c3w",
 	"targets": {
+		"android-aarch64": {
+			"sources": ["android/main.c3", "main.c3"],
+			"linked-libraries": []
+		},
 		"macos-x64": {
 			"linked-libraries": [
 				"CoreFoundation.framework",

@@ -10,6 +10,7 @@ struct Window
 	LinuxWindow src @if(env::LINUX);
 	Win32Window src @if(env::WIN32);
 	WasmWindow src @if(env::WASM);
+	AndroidWindow src @if(env::ANDROID);
 	float width;
 	float height;
 }
